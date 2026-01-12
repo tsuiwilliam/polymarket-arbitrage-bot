@@ -23,7 +23,7 @@ Strategy Logic:
    - Stop loss: Configurable dollar amount (default: -$0.05)
 
 Usage:
-    from strategies.flash_crash_strategy import FlashCrashStrategy, FlashCrashConfig
+    from apps.flash_crash_strategy import FlashCrashStrategy, FlashCrashConfig
     from src import TradingBot
 
     bot = TradingBot(...)
@@ -48,7 +48,7 @@ from dataclasses import dataclass
 from typing import Dict
 
 from lib.terminal_utils import Colors, format_countdown
-from strategies.base_strategy import BaseStrategy, StrategyConfig
+from apps.base_strategy import BaseStrategy, StrategyConfig
 from src.bot import TradingBot
 from src.websocket_client import OrderbookSnapshot
 
@@ -221,3 +221,4 @@ class FlashCrashStrategy(BaseStrategy):
     def on_market_change(self, old_slug: str, new_slug: str) -> None:
         """Handle market change - clear price history."""
         self.prices.clear()
+

@@ -30,13 +30,31 @@ export POLY_PRIVATE_KEY=your_private_key
 export POLY_PROXY_WALLET=0xYourPolymarketProxyWallet
 ```
 
-> **Safe Address**: Find at [polymarket.com/settings](https://polymarket.com/settings)
+> **PROXY WALLET**: Find at [polymarket.com/settings](https://polymarket.com/settings)
 
-### Run Strategy
+### Quick Start - Orderbook Viewer
+
+View real-time orderbook data (read-only, no trading):
 
 ```bash
-python apps/flash_crash_runner.py --coin BTC
+# View ETH market orderbook
+python apps/orderbook_viewer.py --coin ETH
+
 ```
+
+**Note:** Orderbook viewer doesn't require credentials - it's a read-only monitoring tool.
+
+### Quick Start - Flash Crash Strategy
+
+Run the automated trading strategy:
+
+```bash
+# Run with default settings (ETH, $5 size, 30% drop threshold)
+python apps/flash_crash_runner.py --coin ETH
+
+```
+
+**Note:** Flash crash strategy requires `POLY_PRIVATE_KEY` and `POLY_PROXY_WALLET` environment variables.
 
 ## Trading Strategies
 
@@ -48,8 +66,6 @@ Monitors 15-minute markets for sudden probability drops and executes trades auto
 # Default settings
 python apps/flash_crash_runner.py --coin BTC
 
-# Custom parameters
-python apps/flash_crash_runner.py --coin ETH --drop 0.25 --size 10 --take-profit 0.10 --stop-loss 0.05
 ```
 
 **Parameters:**
@@ -65,7 +81,7 @@ python apps/flash_crash_runner.py --coin ETH --drop 0.25 --size 10 --take-profit
 Real-time orderbook visualization:
 
 ```bash
-python apps/orderbook_viewer.py --coin BTC --levels 5
+python apps/orderbook_viewer.py --coin BTC
 ```
 
 ## Usage Examples
@@ -144,9 +160,7 @@ The bot automatically uses gasless mode when credentials are present.
 ```
 polymarket-arbitrage-bot/
 ├── src/                    # Core library
-├── strategies/             # Trading strategies
-├── apps/                   # Application entry points
-├── scripts/                # Utility scripts
+├── apps/                   # Application entry points and strategies
 └── lib/                    # Reusable components
 ```
 

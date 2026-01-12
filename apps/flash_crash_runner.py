@@ -36,8 +36,7 @@ Arguments:
 Prerequisites:
     - Python 3.8 or higher
     - All dependencies installed (see requirements.txt)
-    - A .env file with POLY_PRIVATE_KEY and POLY_PROXY_WALLET,
-      or encrypted credentials created via scripts/setup_wizard.py
+    - A .env file with POLY_PRIVATE_KEY and POLY_PROXY_WALLET
 
 Risk Warning:
     This strategy involves financial risk. Test thoroughly with small
@@ -66,7 +65,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from lib.terminal_utils import Colors
 from src.bot import TradingBot
 from src.config import Config
-from strategies.flash_crash_strategy import FlashCrashStrategy, FlashCrashConfig
+from apps.flash_crash_strategy import FlashCrashStrategy, FlashCrashConfig
 
 
 def main():

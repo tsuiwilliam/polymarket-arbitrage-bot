@@ -16,7 +16,7 @@ Features:
     - Event-driven architecture with async callbacks
 
 Usage:
-    from strategies.base_strategy import BaseStrategy, StrategyConfig
+    from apps.base_strategy import BaseStrategy, StrategyConfig
     from src import TradingBot
 
     class MyStrategy(BaseStrategy):
@@ -53,7 +53,7 @@ from typing import Optional, Dict, List
 from lib.terminal_utils import LogBuffer, log
 from lib.market_manager import MarketManager, MarketInfo
 from lib.price_tracker import PriceTracker
-from lib.position_manager import PositionManager
+from lib.position_manager import PositionManager, Position
 from src.bot import TradingBot
 from src.websocket_client import OrderbookSnapshot
 
@@ -456,3 +456,4 @@ class BaseStrategy(ABC):
     def on_disconnect(self) -> None:
         """Called when WebSocket disconnects."""
         pass
+
