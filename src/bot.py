@@ -342,6 +342,7 @@ class TradingBot:
                 side=side,
                 maker=self.config.safe_address,
                 fee_rate_bps=fee_rate_bps,
+                signature_type=self.config.clob.signature_type,
             )
 
             # Sign order
