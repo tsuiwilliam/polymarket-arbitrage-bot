@@ -768,3 +768,35 @@ class RelayerClient(ApiClient):
             data=body,
             headers=headers
         )
+
+    def get_balance(self) -> List[Dict[str, Any]]:
+        """
+        Get user balances.
+
+        Returns:
+            List of balance objects
+        """
+        endpoint = "/balance"
+        headers = self._build_headers("GET", endpoint)
+        
+        return self._request(
+            "GET",
+            endpoint,
+            headers=headers
+        )
+
+    def get_collateral_balance(self) -> float:
+        """
+        Get USDC/Collateral balance.
+        
+        Returns:
+            Balance as float
+        """
+        try:
+            balances = self.get_balance()
+            for item in balances:
+                if item.get("asset_type") == "COLLATERAL":
+                    return float(item.get("balance", 0))
+        except Exception:
+            pass
+        return 0.0

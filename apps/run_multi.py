@@ -42,8 +42,12 @@ async def run_strategies(bot: TradingBot, strategies: List[FlashCrashStrategy]):
         while True:
             # Build TUI Buffer
             lines = []
+            
+            # Fetch balance
+            balance = await bot.get_collateral_balance()
+            
             lines.append(f"{Colors.BOLD}{'='*80}{Colors.RESET}")
-            lines.append(f"{Colors.BOLD} Multi-Market Flash Crash Bot{Colors.RESET}")
+            lines.append(f"{Colors.BOLD} Multi-Market Bot | Balance: ${balance:.2f}{Colors.RESET}")
             lines.append(f"{Colors.BOLD}{'='*80}{Colors.RESET}")
             
             # Header

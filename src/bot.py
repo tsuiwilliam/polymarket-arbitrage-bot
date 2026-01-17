@@ -269,11 +269,19 @@ class TradingBot:
     def _init_clients(self) -> None:
         """Initialize API clients."""
         # CLOB client
+        # Determine funder address based on signature type
+        # If using EOA (type 0), funder should be the EOA address (signer)
+        # If using SAFE (type 1/2), funder should be the Safe address
+        funder_address = self.config.safe_address
+        if self.config.clob.signature_type == 0 and self.signer:
+            funder_address = self.signer.address
+            logger.info(f"Using EOA address {funder_address} as funder (Signature Type 0)")
+        
         self.clob_client = ClobClient(
             host=self.config.clob.host,
             chain_id=self.config.clob.chain_id,
             signature_type=self.config.clob.signature_type,
-            funder=self.config.safe_address,
+            funder=funder_address,
             api_creds=self._api_creds,
             builder_creds=self.config.builder if self.config.use_gasless else None,
         )
@@ -334,13 +342,18 @@ class TradingBot:
         signer = self.require_signer()
 
         try:
+            # Determine maker address
+            maker_address = self.config.safe_address
+            if self.config.clob.signature_type == 0 and self.signer:
+                maker_address = self.signer.address
+
             # Create order
             order = Order(
                 token_id=token_id,
                 price=price,
                 size=size,
                 side=side,
-                maker=self.config.safe_address,
+                maker=maker_address,
                 fee_rate_bps=fee_rate_bps,
                 signature_type=self.config.clob.signature_type,
             )
@@ -588,6 +601,11 @@ class TradingBot:
         except Exception as e:
             logger.warning(f"Safe deployment failed (may already be deployed): {e}")
             return False
+    async def get_collateral_balance(self) -> float:
+        """Get USDC balance."""
+        if not self.clob_client:
+            return 0.0
+        return await self._run_in_thread(self.clob_client.get_collateral_balance)
 
     def create_order_dict(
         self,
