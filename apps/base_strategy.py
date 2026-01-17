@@ -79,6 +79,7 @@ class StrategyConfig:
     # Display settings
     update_interval: float = 0.1
     order_refresh_interval: float = 30.0  # Seconds between order refreshes
+    render_enabled: bool = True
 
 
 class BaseStrategy(ABC):
@@ -286,7 +287,8 @@ class BaseStrategy(ABC):
                 self._maybe_refresh_orders()
 
                 # Update display
-                self.render_status(prices)
+                if self.config.render_enabled:
+                    self.render_status(prices)
 
                 await asyncio.sleep(self.config.update_interval)
 

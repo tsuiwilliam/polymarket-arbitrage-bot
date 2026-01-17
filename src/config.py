@@ -295,13 +295,15 @@ class Config:
         # CLOB config
         clob_host = get_env("CLOB_HOST")
         chain_id = get_env_int("CHAIN_ID", 137)
+        signature_type = get_env("SIGNATURE_TYPE")
+
         if clob_host:
-            config.clob = ClobConfig(
-                host=clob_host,
-                chain_id=chain_id,
-            )
-        elif chain_id != 137:
-            config.clob.chain_id = chain_id
+            config.clob.host = clob_host
+        
+        config.clob.chain_id = chain_id
+        
+        if signature_type:
+             config.clob.signature_type = int(signature_type)
 
         # Other settings
         data_dir = get_env("DATA_DIR")
@@ -351,6 +353,11 @@ class Config:
         rpc_url = get_env("RPC_URL")
         if rpc_url:
             config.rpc_url = rpc_url
+            
+        # CLOB overrides
+        signature_type = get_env("SIGNATURE_TYPE")
+        if signature_type:
+             config.clob.signature_type = int(signature_type)
 
         # Builder credentials from env override YAML
         api_key = get_env("BUILDER_API_KEY")

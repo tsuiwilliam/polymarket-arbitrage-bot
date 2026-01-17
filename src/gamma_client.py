@@ -13,6 +13,7 @@ Example:
 """
 
 import json
+import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 
@@ -59,8 +60,10 @@ class GammaClient(ThreadLocalSessionMixin):
             Market data dictionary or None if not found
         """
         url = f"{self.host}/markets/slug/{slug}"
+        logger = logging.getLogger(__name__)
 
         try:
+            logger.debug(f"Fetching market: {url}")
             response = self.session.get(url, timeout=self.timeout)
             if response.status_code == 200:
                 return response.json()
