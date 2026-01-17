@@ -310,9 +310,10 @@ class ClobClient(ApiClient):
         # Sign the auth message using EIP-712
         auth_signature = signer.sign_auth_message(timestamp=timestamp, nonce=nonce)
 
-        # L1 headers
+        # L1 headers - CRITICAL: Use proxy/funder address, not signer address
+        # For Gnosis Safe wallets, the funder is the proxy wallet address
         headers = {
-            "POLY_ADDRESS": signer.address,
+            "POLY_ADDRESS": self.funder,
             "POLY_SIGNATURE": auth_signature,
             "POLY_TIMESTAMP": timestamp,
             "POLY_NONCE": str(nonce),
@@ -344,9 +345,10 @@ class ClobClient(ApiClient):
         # Sign the auth message using EIP-712
         auth_signature = signer.sign_auth_message(timestamp=timestamp, nonce=nonce)
 
-        # L1 headers
+        # L1 headers - CRITICAL: Use proxy/funder address, not signer address
+        # For Gnosis Safe wallets, the funder is the proxy wallet address
         headers = {
-            "POLY_ADDRESS": signer.address,
+            "POLY_ADDRESS": self.funder,
             "POLY_SIGNATURE": auth_signature,
             "POLY_TIMESTAMP": timestamp,
             "POLY_NONCE": str(nonce),
