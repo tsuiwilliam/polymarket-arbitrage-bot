@@ -45,18 +45,16 @@ def test_balance():
         
         # Test endpoints
         endpoints = [
-            "/balance", 
-            "/data/balance", 
-            "/data/balances", 
-            "/data/balance-allowance", 
-            "/balance-allowance"
+            ("/balance-allowance", {"asset_type": "COLLATERAL"}),
+            ("/balance-allowance", {"token_id": "2791Bca1f2de4661ED88A30C99A7a9449Aa84174"}), # USDC Polygon
+            ("/balance-allowance", {"asset_id": "2791Bca1f2de4661ED88A30C99A7a9449Aa84174"}),
         ]
         
-        for ep in endpoints:
-            print(f"\nTesting GET {ep}...")
+        for ep, params in endpoints:
+            print(f"\nTesting GET {ep} with params {params}...")
             try:
                 headers = client._build_headers("GET", ep)
-                res = client._request("GET", ep, headers=headers)
+                res = client._request("GET", ep, headers=headers, params=params)
                 print(f"SUCCESS: {json.dumps(res, indent=2)}")
             except Exception as e:
                 print(f"FAILED: {e}")
