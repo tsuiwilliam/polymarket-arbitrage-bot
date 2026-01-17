@@ -133,6 +133,8 @@ def main():
     parser.add_argument("--coins", type=str, default="BTC,ETH,SOL,XRP")
     parser.add_argument("--size", type=float, default=5.0)
     parser.add_argument("--drop", type=float, default=0.30)
+    parser.add_argument("--take-profit", type=float, default=0.10)
+    parser.add_argument("--stop-loss", type=float, default=0.05)
     
     args = parser.parse_args()
     coins = [c.strip().upper() for c in args.coins.split(",")]
@@ -161,6 +163,8 @@ def main():
             coin=coin,
             size=args.size,
             drop_threshold=args.drop,
+            take_profit=args.take_profit,
+            stop_loss=args.stop_loss,
             render_enabled=False 
         )
         strategies.append(FlashCrashStrategy(bot, cfg))
