@@ -632,13 +632,18 @@ class ClobClient(ApiClient):
         Get USDC/Collateral balance.
         
         Returns:
-            Balance as float
+            Balance as float (USDC)
         """
         try:
-            balances = self.get_balance()
-            for item in balances:
-                if item.get("asset_type") == "COLLATERAL":
-                    return float(item.get("balance", 0))
+            endpoint = "/balance-allowance"
+            params = {"asset_type": "COLLATERAL"}
+            headers = self._build_headers("GET", endpoint)
+            
+            res = self._request("GET", endpoint, headers=headers, params=params)
+            
+            # Response format: {"balance": "1000000", "allowances": ...}
+            raw_balance = res.get("balance", "0")
+            return float(raw_balance) / 1_000_000 # USDC has 6 decimals
         except Exception:
             pass
         return 0.0
