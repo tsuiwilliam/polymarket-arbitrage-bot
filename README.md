@@ -184,31 +184,10 @@ Private keys are encrypted using PBKDF2 (480,000 iterations) + Fernet symmetric 
 
 ## Troubleshooting
 
-### Authentication Issues
-
-If you're having trouble authenticating your wallet:
-
-1. **Run the debug script**:
-   ```bash
-   python debug_auth.py
-   ```
-
-2. **Read the detailed guide**: [AUTHENTICATION_GUIDE.md](AUTHENTICATION_GUIDE.md)
-
-3. **Check common issues**:
-   - Using wrong address: Must use **PROXY WALLET** from polymarket.com/settings
-   - Signer vs Proxy: For Gnosis Safe wallets, these are different addresses
-   - System time out of sync: Ensure your clock is accurate
-
-### Common Issues
-
 | Issue | Solution |
 |-------|----------|
-| Authentication failed | Run `python debug_auth.py` - see [AUTHENTICATION_GUIDE.md](AUTHENTICATION_GUIDE.md) |
 | Missing credentials | Set `POLY_PRIVATE_KEY` and `POLY_PROXY_WALLET` |
 | Invalid private key | Ensure 64 hex characters (0x prefix optional) |
-| Wrong address used | Use PROXY wallet from polymarket.com/settings, not signer address |
-| Timestamp errors | Sync your system clock: `sudo ntpdate -s time.nist.gov` |
 | Order failed | Check sufficient balance |
 | WebSocket errors | Verify network/firewall settings |
 
