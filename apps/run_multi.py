@@ -178,13 +178,13 @@ def main():
         sys.exit(1)
 
     # Sanity check at startup
-    if not bot.verify_setup():
+    if not asyncio.run(bot.verify_setup()):
         print(f"{Colors.RED}Startup checks failed. Please check your credentials and balance.{Colors.RESET}")
         # We don't necessarily want to exit if balance is low, 
-        # but if we can't even get profile, we should exit.
+        # but if we can't even get orders, we should exit.
         auth_working = False
         try:
-            bot.clob_client.get_open_orders()
+            asyncio.run(bot._run_in_thread(bot.clob_client.get_open_orders))
             auth_working = True
         except:
              pass

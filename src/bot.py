@@ -298,7 +298,7 @@ class TradingBot:
             )
             logger.info("Relayer client initialized (gasless enabled)")
 
-    def verify_setup(self) -> bool:
+    async def verify_setup(self) -> bool:
         """
         Verify that the bot is properly configured and has access to APIs.
         Returns True if setup is valid.
