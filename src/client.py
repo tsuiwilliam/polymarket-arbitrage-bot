@@ -537,12 +537,6 @@ class ClobClient(ApiClient):
             headers=headers
         )
 
-    def get_profile(self) -> Dict[str, Any]:
-        """Get user profile information (requires authentication)."""
-        endpoint = "/profile"
-        headers = self._build_headers("GET", endpoint)
-        return self._request("GET", endpoint, headers=headers)
-
     def cancel_order(self, order_id: str) -> Dict[str, Any]:
         """
         Cancel an order.

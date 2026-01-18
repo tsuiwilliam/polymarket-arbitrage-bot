@@ -315,8 +315,9 @@ class TradingBot:
 
         # 2. Check User API Credentials
         try:
-            profile = self.clob_client.get_profile()
-            logger.info(f"✓ User API Key valid. Profile: {profile.get('proxyAddress') or 'EOA'}")
+            # get_open_orders is a reliable health check for L2 auth
+            await self._run_in_thread(self.clob_client.get_open_orders)
+            logger.info("✓ User API Key valid.")
         except Exception as e:
             logger.error(f"✗ User API credentials invalid or expired: {e}")
             success = False
@@ -338,7 +339,7 @@ class TradingBot:
 
         # 4. Check Balance
         try:
-            balance = self.get_usdc_balance()
+            balance = await self.get_collateral_balance()
             logger.info(f"✓ USDC Balance: ${balance:.2f}")
             if balance < 1.0:
                 logger.warning("! Low balance (under $1.00). Trades might fail.")
