@@ -164,10 +164,18 @@ class ApiClient(ThreadLocalSessionMixin):
                 else:
                     raise ApiError(f"Unsupported method: {method}")
 
-                response.raise_for_status()
+                try:
+                    response.raise_for_status()
+                except requests.exceptions.HTTPError as he:
+                    error_msg = f"HTTP Error {response.status_code}: {response.text}"
+                    raise ApiError(error_msg)
+                
                 return response.json() if response.text else {}
 
             except requests.exceptions.RequestException as e:
+                # If we already raised an ApiError (e.g. from HTTPError), re-raise it
+                if isinstance(e, ApiError):
+                    raise e
                 last_error = e
                 if attempt < self.retry_count - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff

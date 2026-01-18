@@ -75,6 +75,8 @@ class Order:
     side: str
     maker: str
     nonce: Optional[int] = None
+    expiration: int = 0
+    salt: int = 0
     fee_rate_bps: int = 0
     signature_type: int = 2
 
@@ -253,14 +255,14 @@ class OrderSigner:
         try:
             # Build order message for EIP-712
             order_message = {
-                "salt": 0,
+                "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
                 "signer": self.address,
                 "taker": "0x0000000000000000000000000000000000000000",
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
                 "takerAmount": int(order.taker_amount),
-                "expiration": 0,
+                "expiration": order.expiration,
                 "nonce": order.nonce,
                 "feeRateBps": order.fee_rate_bps,
                 "side": order.side_value,
@@ -278,13 +280,17 @@ class OrderSigner:
 
             return {
                 "order": {
-                    "tokenId": order.token_id,
-                    "price": order.price,
-                    "size": order.size,
-                    "side": order.side,
+                    "salt": order.salt,
                     "maker": order.maker,
+                    "signer": self.address,
+                    "taker": "0x0000000000000000000000000000000000000000",
+                    "tokenId": order.token_id,
+                    "makerAmount": order.maker_amount,
+                    "takerAmount": order.taker_amount,
+                    "expiration": order.expiration,
                     "nonce": order.nonce,
                     "feeRateBps": order.fee_rate_bps,
+                    "side": order.side_value,
                     "signatureType": order.signature_type,
                 },
                 "signature": "0x" + signed.signature.hex(),
