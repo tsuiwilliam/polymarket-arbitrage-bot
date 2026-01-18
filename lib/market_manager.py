@@ -359,7 +359,8 @@ class MarketManager:
         # Subscribe to current market tokens
         token_list = list(self.current_market.token_ids.values())
         if token_list:
-            await self.ws.subscribe(token_list, replace=True)
+            # Use replace=False for shared WebSocket to avoid overwriting other coins
+            await self.ws.subscribe(token_list, replace=False)
 
         return True
 
