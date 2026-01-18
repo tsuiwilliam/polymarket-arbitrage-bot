@@ -246,7 +246,7 @@ class OrderSigner:
         signed = self.wallet.sign_message(signable)
         return "0x" + signed.signature.hex()
 
-    def sign_order(self, order: Order, owner: Optional[str] = None) -> Dict[str, Any]:
+    def sign_order(self, order: Order) -> Dict[str, Any]:
         """
         Sign a Polymarket order.
         """
@@ -293,7 +293,7 @@ class OrderSigner:
                     "signatureType": order.signature_type, # integer
                     "signature": "0x" + signed.signature.hex(), # string
                 },
-                "owner": owner or order.maker, # API Key if provided, else address
+                "owner": order.maker, # Wallet address that owns the API key
                 "orderType": "GTC",
                 "postOnly": False
             }
