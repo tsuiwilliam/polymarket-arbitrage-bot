@@ -366,8 +366,9 @@ class TradingBot:
                 signature_type=self.config.clob.signature_type,
             )
 
-            # Sign order
-            signed = signer.sign_order(order)
+            # Sign order with API key as owner
+            api_key = self.clob_client.creds.api_key if self.clob_client.creds else None
+            signed = signer.sign_order(order, api_key=api_key)
 
             # Submit to CLOB
             response = await self._run_in_thread(
