@@ -367,7 +367,7 @@ class TradingBot:
             )
 
             # Sign order with API key as owner
-            api_key = self.clob_client.creds.api_key if self.clob_client.creds else None
+            api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
             signed = signer.sign_order(order, api_key=api_key)
 
             # Submit to CLOB
