@@ -121,11 +121,17 @@ class OrderSigner:
         domain: EIP-712 domain separator
     """
 
-    # Polymarket CLOB EIP-712 domain
-    DOMAIN = {
+    # Polymarket CLOB EIP-712 domains
+    AUTH_DOMAIN = {
         "name": "ClobAuthDomain",
         "version": "1",
-        "chainId": 137,  # Polygon mainnet
+        "chainId": 137,
+    }
+
+    ORDER_DOMAIN = {
+        "name": "ClobOrderDomain",
+        "version": "1",
+        "chainId": 137,
     }
 
     # Order type definition for EIP-712
@@ -232,7 +238,7 @@ class OrderSigner:
         }
 
         signable = encode_typed_data(
-            domain_data=self.DOMAIN,
+            domain_data=self.AUTH_DOMAIN,
             message_types=auth_types,
             message_data=message_data
         )
@@ -270,9 +276,9 @@ class OrderSigner:
                 "signatureType": order.signature_type,
             }
 
-            # Sign the order using new API format
+            # Sign the order using ORDER_DOMAIN
             signable = encode_typed_data(
-                domain_data=self.DOMAIN,
+                domain_data=self.ORDER_DOMAIN,
                 message_types=self.ORDER_TYPES,
                 message_data=order_message
             )
@@ -281,24 +287,23 @@ class OrderSigner:
 
             return {
                 "order": {
-                    "salt": order.salt,
+                    "salt": str(order.salt),
                     "maker": order.maker,
                     "signer": self.address,
                     "taker": "0x0000000000000000000000000000000000000000",
-                    "tokenId": order.token_id,
-                    "makerAmount": order.maker_amount,
-                    "takerAmount": order.taker_amount,
-                    "expiration": order.expiration,
-                    "nonce": order.nonce,
-                    "feeRateBps": order.fee_rate_bps,
-                    "side": order.side_value,
+                    "tokenId": str(order.token_id),
+                    "makerAmount": str(order.maker_amount),
+                    "takerAmount": str(order.taker_amount),
+                    "expiration": str(order.expiration),
+                    "nonce": str(order.nonce),
+                    "feeRateBps": str(order.fee_rate_bps),
+                    "side": order.side_value, # side as int inside order
                     "signatureType": order.signature_type,
                 },
-                "owner": order.maker, # Required top-level
-                "price": str(order.price), # Required top-level
-                "side": order.side, # Required as string (BUY/SELL)
+                "owner": order.maker,
+                "price": f"{order.price:.4f}",
+                "side": order.side, # side as string (BUY/SELL) top-level
                 "signature": "0x" + signed.signature.hex(),
-                "signer": self.address,
             }
 
         except Exception as e:
