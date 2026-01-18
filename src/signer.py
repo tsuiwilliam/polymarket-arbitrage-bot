@@ -97,9 +97,20 @@ class Order:
             self.nonce = int(time.time() * 1_000_000)
 
         # Convert to integers for blockchain
-        self.maker_amount = str(int(self.size * self.price * 10**USDC_DECIMALS))
-        self.taker_amount = str(int(self.size * 10**USDC_DECIMALS))
-        self.side_value = 0 if self.side == "BUY" else 1
+        # BUY: Maker gives USDC (price*size), Maker receives Token (size)
+        # SELL: Maker gives Token (size), Maker receives USDC (price*size)
+        if self.side == "BUY":
+            # Maker gives USDC
+            self.maker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
+            # Maker receives Token
+            self.taker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
+            self.side_value = 0
+        else:
+            # Maker gives Token
+            self.maker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
+            # Maker receives USDC
+            self.taker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
+            self.side_value = 1
 
 
 class SignerError(Exception):
@@ -132,6 +143,7 @@ class OrderSigner:
         "name": "ClobOrderDomain",
         "version": "1",
         "chainId": 137,
+        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
     }
 
     # Order type definition for EIP-712
@@ -293,7 +305,7 @@ class OrderSigner:
                     "expiration": str(order.expiration), # string
                     "nonce": str(order.nonce), # string
                     "feeRateBps": str(order.fee_rate_bps), # string
-                    "side": order.side, # string "BUY" or "SELL"
+                    "side": order.side_value, # SIDE MUST BE INTEGER (0/1) IN JSON AS WELL
                     "signatureType": order.signature_type, # integer
                     "signature": "0x" + signed.signature.hex(), # string
                 },

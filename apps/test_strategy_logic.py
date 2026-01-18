@@ -72,13 +72,27 @@ async def test_logic():
     else:
         print(f"{Colors.RED}- FAILED: bot.place_order was NOT called!{Colors.RESET}")
 
+    # 8. Test SELL logic manually
+    from src.signer import Order
+    print("\n- Testing SELL amount logic...")
+    sell_order = Order(
+        token_id="123", price=0.50, size=1.0, side="SELL", maker="0x123", salt=1
+    )
+    print(f"  SELL: Maker gives Token ({sell_order.maker_amount})")
+    print(f"  SELL: Maker receives USDC ({sell_order.taker_amount})")
+    
+    amount_ok = (sell_order.maker_amount == "1000000" and sell_order.taker_amount == "500000")
+    if amount_ok:
+        print(f"{Colors.GREEN}  ✓ SELL logic correct.{Colors.RESET}")
+    else:
+        print(f"{Colors.RED}  ✗ SELL logic WRONG: {sell_order.maker_amount} vs {sell_order.taker_amount}{Colors.RESET}")
+
     print("\n" + "=" * 80)
-    if event and bot.place_order.called:
+    if event and bot.place_order.called and amount_ok:
         print(f"{Colors.BOLD}{Colors.GREEN}VERIFICATION RESULT: PASSED{Colors.RESET}")
-        print("Strategy conditions are intact and correctly trigger orders.")
+        print("Strategy conditions and signing logic are intact.")
     else:
         print(f"{Colors.BOLD}{Colors.RED}VERIFICATION RESULT: FAILED{Colors.RESET}")
-        print("Strategy logic has a flaw.")
     print("=" * 80)
 
 if __name__ == "__main__":
