@@ -93,7 +93,8 @@ class Order:
             raise ValueError(f"Invalid size: {self.size}")
 
         if self.nonce is None:
-            self.nonce = int(time.time())
+            # Use microsecond precision to avoid collisions in same-second orders
+            self.nonce = int(time.time() * 1_000_000)
 
         # Convert to integers for blockchain
         self.maker_amount = str(int(self.size * self.price * 10**USDC_DECIMALS))
@@ -293,6 +294,9 @@ class OrderSigner:
                     "side": order.side_value,
                     "signatureType": order.signature_type,
                 },
+                "owner": order.maker, # Required top-level
+                "price": str(order.price), # Required top-level
+                "side": order.side, # Required as string (BUY/SELL)
                 "signature": "0x" + signed.signature.hex(),
                 "signer": self.address,
             }
