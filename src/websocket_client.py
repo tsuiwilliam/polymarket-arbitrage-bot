@@ -390,9 +390,10 @@ class MarketWebSocket:
 
         try:
             msg_json = json.dumps(subscribe_msg)
-            logger.debug(f"Sending subscribe message: {msg_json}")
+            logger.info(f"[WS] Subscribing to {len(current_assets)} assets (replace={replace})")
+            logger.debug(f"[WS] Asset IDs: {current_assets}")
             await self._ws.send(msg_json)
-            logger.info(f"Subscribed to {len(current_assets)} assets successfully")
+            logger.info(f"[WS] Subscribe message sent successfully")
             return True
         except Exception as e:
             logger.error(f"Failed to subscribe: {e}")
