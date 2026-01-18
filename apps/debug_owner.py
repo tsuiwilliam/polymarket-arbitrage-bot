@@ -21,8 +21,19 @@ def main():
     # Load config
     config = Config.from_env()
     
+    # Get private key from environment
+    private_key = os.environ.get("POLY_PRIVATE_KEY")
+    if not private_key:
+        print("ERROR: POLY_PRIVATE_KEY not set in environment")
+        return
+    
+    # Clean private key
+    private_key = private_key.strip().replace('"', '').replace("'", "")
+    if private_key.startswith("0x"):
+        private_key = private_key[2:]
+    
     # Get addresses
-    signer = OrderSigner(config.private_key)
+    signer = OrderSigner(private_key)
     eoa_address = signer.address
     proxy_address = config.safe_address
     
@@ -34,7 +45,7 @@ def main():
     # Initialize client
     clob = ClobClient(
         host=config.clob.host,
-        key=config.private_key,
+        key=private_key,
         chain_id=config.clob.chain_id,
         signature_type=config.clob.signature_type,
         funder=eoa_address if config.clob.signature_type == 0 else proxy_address
