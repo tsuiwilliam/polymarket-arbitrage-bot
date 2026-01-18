@@ -65,6 +65,7 @@ from .config import Config, BuilderConfig
 from .signer import OrderSigner, Order
 from .client import ClobClient, RelayerClient, ApiCredentials
 from .crypto import KeyManager, CryptoError, InvalidPasswordError
+from .gamma_client import GammaClient
 
 
 # Configure logging
@@ -229,6 +230,9 @@ class TradingBot:
         if self.signer and not self._api_creds:
             self._derive_api_creds()
 
+        # Components for auto-discovery
+        self.gamma_client = GammaClient(host=self.config.clob.host.replace("clob", "gamma-api"))
+        
         logger.info(f"TradingBot initialized (gasless: {self.config.use_gasless})")
 
     def _load_encrypted_key(self, filepath: str, password: str) -> None:
@@ -298,6 +302,30 @@ class TradingBot:
             )
             logger.info("Relayer client initialized (gasless enabled)")
 
+    async def auto_discover_proxy(self) -> Optional[str]:
+        """
+        Attempt to automatically discover the user's proxy (Safe) address.
+        Checks the Gamma API public-profile first.
+        """
+        if not self.signer:
+            return None
+        
+        eoa = self.signer.address
+        logger.info(f"Attempting to auto-discover proxy for {eoa}...")
+        
+        try:
+            profile = await self._run_in_thread(self.gamma_client.get_public_profile, eoa)
+            if profile and profile.get("proxyWallet"):
+                proxy = profile["proxyWallet"]
+                logger.info(f"✓ Found proxy wallet: {proxy}")
+                return proxy
+            
+            logger.info("! No proxy wallet found in public profile.")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to auto-discover proxy: {e}")
+            return None
+
     async def verify_setup(self) -> bool:
         """
         Verify that the bot is properly configured and has access to APIs.
@@ -325,17 +353,29 @@ class TradingBot:
         # 3. Check Builder API (if gasless)
         if self.config.use_gasless:
             if not self.config.builder or not self.config.builder.is_configured():
-                logger.error("✗ Gasless enabled but Builder API keys are missing in .env")
+                logger.error("✗ Gasless enabled but Builder API keys are missing (Master Builder fallback failed)")
                 success = False
             else:
-                # We can't easily check builder key without an endpoint, but we can verify it's presence
-                logger.info("✓ Builder API keys configured")
+                logger.info("✓ Builder API keys configured (using Admin or User keys)")
             
             if not self.config.safe_address:
-                logger.error("✗ Gasless enabled but POLY_PROXY_WALLET is missing in .env")
-                success = False
-            else:
-                logger.info(f"✓ Proxy Wallet configured: {self.config.safe_address}")
+                logger.info("! POLY_PROXY_WALLET missing. Attempting auto-discovery...")
+                proxy = await self.auto_discover_proxy()
+                if proxy:
+                    self.config.safe_address = proxy
+                    self._init_clients()
+                    logger.info(f"✓ Proxy Wallet discovered: {proxy}")
+                else:
+                    logger.error("✗ Gasless enabled but proxy wallet could not be discovered.")
+                    success = False
+            
+            if self.config.safe_address:
+                logger.info("✓ Proxy Wallet configured. Checking deployment...")
+                # Try to deploy/ensure deployment
+                await self.deploy_safe_if_needed()
+                # Ensure USDC approval for CTF exchange
+                await self.approve_usdc_gasless()
+                logger.info("✓ Proxy setup (deployment/approval) initiated.")
 
         # 4. Check Balance
         try:

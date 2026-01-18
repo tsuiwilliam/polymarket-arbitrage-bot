@@ -160,21 +160,18 @@ def main():
     coins = [c.strip().upper() for c in args.coins.split(",")]
 
     private_key = os.environ.get("POLY_PRIVATE_KEY")
-    # Sanitize key here too just in case
     if private_key:
         private_key = private_key.strip().replace('"', '').replace("'", "")
-        
-    safe_address = os.environ.get("POLY_PROXY_WALLET")
-
-    if not private_key or not safe_address:
-        print(f"{Colors.RED}Error: CREDENTIALS MISSING{Colors.RESET}")
+    
+    if not private_key:
+        print(f"{Colors.RED}Error: POLY_PRIVATE_KEY is missing in .env{Colors.RESET}")
         sys.exit(1)
 
     config = Config.from_env()
     bot = TradingBot(config=config, private_key=private_key)
 
     if not bot.is_initialized():
-        print(f"{Colors.RED}Failed to init bot{Colors.RESET}")
+        print(f"{Colors.RED}Failed to initialize bot. Check your private key.{Colors.RESET}")
         sys.exit(1)
 
     # Sanity check at startup

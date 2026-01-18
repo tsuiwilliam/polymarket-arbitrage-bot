@@ -16,6 +16,9 @@ Environment Variables:
     POLY_BUILDER_API_KEY: Builder Program API key
     POLY_BUILDER_API_SECRET: Builder Program API secret
     POLY_BUILDER_API_PASSPHRASE: Builder Program passphrase
+    POLY_MASTER_BUILDER_KEY: (Optional) Master Builder API key
+    POLY_MASTER_BUILDER_SECRET: (Optional) Master Builder API secret
+    POLY_MASTER_BUILDER_PASSPHRASE: (Optional) Master Builder passphrase
     POLY_CLOB_HOST: CLOB API host
     POLY_CHAIN_ID: Chain ID (default: 137)
     POLY_DATA_DIR: Data directory for credentials
@@ -329,6 +332,19 @@ class Config:
         # Auto-detect gasless mode
         config.use_gasless = config.builder.is_configured()
 
+        # Check for Master Builder credentials if primary ones are missing
+        if not config.use_gasless:
+            m_key = get_env("MASTER_BUILDER_KEY")
+            m_secret = get_env("MASTER_BUILDER_SECRET")
+            m_pass = get_env("MASTER_BUILDER_PASSPHRASE")
+            if m_key and m_secret and m_pass:
+                config.builder = BuilderConfig(
+                    api_key=m_key,
+                    api_secret=m_secret,
+                    api_passphrase=m_pass,
+                )
+                config.use_gasless = True
+
         return config
 
     @classmethod
@@ -386,6 +402,19 @@ class Config:
         # Re-check gasless mode
         config.use_gasless = config.builder.is_configured()
 
+        # Check for Master Builder credentials if primary ones are missing
+        if not config.use_gasless:
+            m_key = get_env("MASTER_BUILDER_KEY")
+            m_secret = get_env("MASTER_BUILDER_SECRET")
+            m_pass = get_env("MASTER_BUILDER_PASSPHRASE")
+            if m_key and m_secret and m_pass:
+                config.builder = BuilderConfig(
+                    api_key=m_key,
+                    api_secret=m_secret,
+                    api_passphrase=m_pass,
+                )
+                config.use_gasless = True
+
         return config
 
     def save(self, filepath: str = "config.yaml") -> None:
@@ -420,9 +449,6 @@ class Config:
             List of validation errors (empty if valid)
         """
         errors = []
-
-        if not self.safe_address:
-            errors.append("safe_address is required")
 
         if not self.rpc_url:
             errors.append("rpc_url is required")
