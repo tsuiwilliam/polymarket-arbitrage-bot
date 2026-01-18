@@ -361,7 +361,7 @@ class TradingBot:
                 maker=maker_address,
                 expiration=expiration,
                 salt=salt,
-                nonce=0, # Defaults to 0 in official SDK
+                nonce=None, # Allow Order class to generate timestamp nonce
                 fee_rate_bps=fee_rate_bps,
                 signature_type=self.config.clob.signature_type,
             )

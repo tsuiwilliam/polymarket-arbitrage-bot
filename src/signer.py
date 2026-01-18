@@ -143,7 +143,6 @@ class OrderSigner:
         "name": "ClobOrderDomain",
         "version": "1",
         "chainId": 137,
-        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
     }
 
     # Order type definition for EIP-712
