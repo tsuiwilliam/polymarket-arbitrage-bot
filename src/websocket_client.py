@@ -385,7 +385,7 @@ class MarketWebSocket:
 
         subscribe_msg = {
             "assets_ids": current_assets,
-            "type": "market",
+            "type": "MARKET",  # Restored to uppercase as it's more common in official examples
         }
 
         try:

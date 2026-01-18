@@ -19,6 +19,13 @@ from typing import List
 logging.getLogger("src.websocket_client").setLevel(logging.INFO)
 logging.getLogger("src.bot").setLevel(logging.INFO)
 
+# Setup logging to file if requested
+if os.environ.get("POLY_DEBUG_LOG"):
+    file_handler = logging.FileHandler("bot_debug.log")
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(file_handler)
+    print(f"\n[DEBUG] Detailed logs being written to bot_debug.log\n")
+
 # Auto-load .env file
 from dotenv import load_dotenv
 load_dotenv()
