@@ -245,6 +245,7 @@ class MarketWebSocket:
         self._ws: Optional["WebSocketClientProtocol"] = None
         self._running = False
         self._subscribed_assets: Set[str] = set()
+        self._market_established = False  # Track if MARKET channel is initialized
 
         # Orderbook cache
         self._orderbooks: Dict[str, OrderbookSnapshot] = {}
@@ -373,20 +374,38 @@ class MarketWebSocket:
             # Clear old subscriptions and cached data
             self._subscribed_assets.clear()
             self._orderbooks.clear()
+            self._market_established = False
 
+        # Identify ONLY the new assets if we are already established
+        new_assets = [aid for aid in asset_ids if aid not in self._subscribed_assets]
         self._subscribed_assets.update(asset_ids)
         current_assets = list(self._subscribed_assets)
-        logger.info(f"subscribe() called with {len(asset_ids)} new assets, total assets: {len(current_assets)}")
+        
+        logger.info(f"subscribe() total assets: {len(current_assets)}")
 
         if not self.is_connected:
             # Will subscribe after connect
             logger.info("Not connected yet, will subscribe after connect")
             return True
 
-        subscribe_msg = {
-            "assets_ids": current_assets,
-            "type": "MARKET",  # Restored to uppercase as it's more common in official examples
-        }
+        # Decide which message type to send
+        if not self._market_established:
+            # First time or after replace=True: send full list with type: MARKET
+            subscribe_msg = {
+                "assets_ids": current_assets,
+                "type": "MARKET",
+            }
+            self._market_established = True
+        else:
+            # Already established: send only new assets with operation: subscribe
+            if not new_assets:
+                logger.debug("No new assets to subscribe to")
+                return True
+                
+            subscribe_msg = {
+                "assets_ids": new_assets,
+                "operation": "subscribe",
+            }
 
         try:
             msg_json = json.dumps(subscribe_msg)
@@ -398,37 +417,6 @@ class MarketWebSocket:
             logger.error(f"Failed to subscribe: {e}")
             if self._on_error:
                 self._on_error(e)
-            return False
-
-    async def subscribe_more(self, asset_ids: List[str]) -> bool:
-        """
-        Subscribe to additional assets.
-
-        Args:
-            asset_ids: Additional token IDs to subscribe to
-
-        Returns:
-            True if subscription sent successfully
-        """
-        if not asset_ids:
-            return False
-
-        self._subscribed_assets.update(asset_ids)
-
-        if not self.is_connected:
-            return True
-
-        subscribe_msg = {
-            "assets_ids": asset_ids,
-            "operation": "subscribe",
-        }
-
-        try:
-            await self._ws.send(json.dumps(subscribe_msg))
-            logger.info(f"Subscribed to {len(asset_ids)} additional assets")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to subscribe: {e}")
             return False
 
     async def unsubscribe(self, asset_ids: List[str]) -> bool:
@@ -596,6 +584,7 @@ class MarketWebSocket:
             await self._run_loop()
 
             # Handle disconnect
+            self._market_established = False  # Reset flag on disconnect
             if self._on_disconnect:
                 self._on_disconnect()
 

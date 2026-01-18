@@ -399,18 +399,25 @@ class MarketManager:
             if not self._should_switch_market(old_market, market):
                 continue
 
-            # Market changed - resubscribe to new tokens
+            # Market changed - calculate deltas
+            to_unsubscribe = list(old_tokens - new_tokens)
+            to_subscribe = list(new_tokens) # Always re-subscribe to ensure presence
+            
             import logging
             mgr_logger = logging.getLogger(__name__)
             mgr_logger.info(f"Market Switching for {self.coin}: {old_slug} -> {market.slug}")
             
-            # Unsubscribe from old tokens if they exist
-            if old_tokens:
-                mgr_logger.debug(f"Unsubscribing from old tokens: {list(old_tokens)}")
-                await self.ws.unsubscribe(list(old_tokens))
+            # Add small jitter to avoid simultaneous hits on shared WS
+            import random
+            await asyncio.sleep(random.uniform(0.1, 0.5))
+
+            # Unsubscribe from truly old tokens
+            if to_unsubscribe:
+                mgr_logger.debug(f"Unsubscribing from {len(to_unsubscribe)} tokens")
+                await self.ws.unsubscribe(to_unsubscribe)
             
-            # Subscribe to new tokens (additive)
-            await self.ws.subscribe(list(new_tokens), replace=False)
+            # Subscribe to new tokens (additive via the new WS logic)
+            await self.ws.subscribe(to_subscribe, replace=False)
             self._update_current_market(market)
             mgr_logger.info(f"Resubscribed to {self.coin} market successfully")
 
