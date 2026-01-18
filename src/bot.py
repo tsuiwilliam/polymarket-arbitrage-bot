@@ -298,6 +298,56 @@ class TradingBot:
             )
             logger.info("Relayer client initialized (gasless enabled)")
 
+    def verify_setup(self) -> bool:
+        """
+        Verify that the bot is properly configured and has access to APIs.
+        Returns True if setup is valid.
+        """
+        logger.info("--- Performing Startup Sanity Checks ---")
+        success = True
+
+        # 1. Check Signer/Funder
+        if not self.signer:
+            logger.error("✗ No private key loaded. Signer unavailable.")
+            success = False
+        else:
+            logger.info(f"✓ Signer loaded: {self.signer.address}")
+
+        # 2. Check User API Credentials
+        try:
+            profile = self.clob_client.get_profile()
+            logger.info(f"✓ User API Key valid. Profile: {profile.get('proxyAddress') or 'EOA'}")
+        except Exception as e:
+            logger.error(f"✗ User API credentials invalid or expired: {e}")
+            success = False
+
+        # 3. Check Builder API (if gasless)
+        if self.config.use_gasless:
+            if not self.config.builder or not self.config.builder.is_configured():
+                logger.error("✗ Gasless enabled but Builder API keys are missing in .env")
+                success = False
+            else:
+                # We can't easily check builder key without an endpoint, but we can verify it's presence
+                logger.info("✓ Builder API keys configured")
+            
+            if not self.config.safe_address:
+                logger.error("✗ Gasless enabled but POLY_PROXY_WALLET is missing in .env")
+                success = False
+            else:
+                logger.info(f"✓ Proxy Wallet configured: {self.config.safe_address}")
+
+        # 4. Check Balance
+        try:
+            balance = self.get_usdc_balance()
+            logger.info(f"✓ USDC Balance: ${balance:.2f}")
+            if balance < 1.0:
+                logger.warning("! Low balance (under $1.00). Trades might fail.")
+        except Exception as e:
+            logger.warning(f"! Could not fetch balance (check your network/RPC): {e}")
+
+        logger.info("--- Sanity Checks Complete ---")
+        return success
+
     async def _run_in_thread(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Run a blocking call in a worker thread to avoid event loop stalls."""
         return await asyncio.to_thread(func, *args, **kwargs)

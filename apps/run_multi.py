@@ -177,6 +177,25 @@ def main():
         print(f"{Colors.RED}Failed to init bot{Colors.RESET}")
         sys.exit(1)
 
+    # Sanity check at startup
+    if not bot.verify_setup():
+        print(f"{Colors.RED}Startup checks failed. Please check your credentials and balance.{Colors.RESET}")
+        # We don't necessarily want to exit if balance is low, 
+        # but if we can't even get profile, we should exit.
+        profile_working = False
+        try:
+            bot.clob_client.get_profile()
+            profile_working = True
+        except:
+             pass
+        
+        if not profile_working:
+             print(f"{Colors.RED}Fatal: Could not authenticate with Polymarket. Exiting.{Colors.RESET}")
+             sys.exit(1)
+        
+        print(f"{Colors.YELLOW}Proceeding anyway in 3 seconds...{Colors.RESET}")
+        time.sleep(3)
+
     strategies = []
     for coin in coins:
         cfg = FlashCrashConfig(
