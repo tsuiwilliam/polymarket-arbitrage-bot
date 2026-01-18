@@ -46,8 +46,13 @@ async def run_strategies(bot: TradingBot, strategies: List[FlashCrashStrategy]):
             # Fetch balance
             balance = await bot.get_collateral_balance()
             
+            # Get wallet info
+            maker_address = bot.config.safe_address if bot.config.clob.signature_type == 2 else bot.signer.address
+            sig_type_name = "Proxy" if bot.config.clob.signature_type == 2 else "EOA"
+            
             lines.append(f"{Colors.BOLD}{'='*80}{Colors.RESET}")
             lines.append(f"{Colors.BOLD} Multi-Market Bot | Balance: ${balance:.2f}{Colors.RESET}")
+            lines.append(f"{Colors.CYAN} Wallet: {maker_address[:10]}...{maker_address[-8:]} ({sig_type_name}){Colors.RESET}")
             lines.append(f"{Colors.BOLD}{'='*80}{Colors.RESET}")
             
             # Header
