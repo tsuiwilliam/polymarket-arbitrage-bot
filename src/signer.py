@@ -295,23 +295,21 @@ class OrderSigner:
             # Return the JSON payload structure required by POST /order
             return {
                 "order": {
-                    "salt": order.salt, # integer
-                    "maker": order.maker, # string address
-                    "signer": self.address, # string address
+                    "salt": order.salt,
+                    "maker": to_checksum_address(order.maker),
+                    "signer": to_checksum_address(self.address),
                     "taker": "0x0000000000000000000000000000000000000000",
-                    "tokenId": str(order.token_id), # string
-                    "makerAmount": str(order.maker_amount), # string
-                    "takerAmount": str(order.taker_amount), # string
-                    "expiration": str(order.expiration), # string
-                    "nonce": str(order.nonce), # string
-                    "feeRateBps": str(order.fee_rate_bps), # string
-                    "side": order.side_value, # SIDE MUST BE INTEGER (0/1) IN JSON AS WELL
-                    "signatureType": order.signature_type, # integer
-                    "signature": "0x" + signed.signature.hex(), # string
+                    "tokenId": str(order.token_id),
+                    "makerAmount": str(order.maker_amount),
+                    "takerAmount": str(order.taker_amount),
+                    "expiration": str(order.expiration),
+                    "nonce": str(order.nonce),
+                    "feeRateBps": int(order.fee_rate_bps),
+                    "side": order.side,
+                    "signatureType": int(order.signature_type),
+                    "signature": "0x" + signed.signature.hex(),
                 },
-                "owner": api_key or order.maker, # API KEY STRING (not wallet address!)
-                "orderType": "GTC",
-                "postOnly": False
+                "owner": api_key or order.maker,
             }
 
         except Exception as e:
