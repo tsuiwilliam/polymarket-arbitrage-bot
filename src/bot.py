@@ -349,8 +349,8 @@ class TradingBot:
             if self.config.clob.signature_type == 0 and self.signer:
                 maker_address = self.signer.address
 
-            # Create order with expiration and salt
-            expiration = int(time.time() + 3600)  # 1 hour expiration
+            # For GTC orders, expiration must be 0. For GTD, it should be a timestamp.
+            expiration = 0 if order_type == "GTC" else int(time.time() + 3600)
             salt = random.randint(1, 10**12)      # Random salt for uniqueness
 
             order = Order(
@@ -366,15 +366,32 @@ class TradingBot:
                 signature_type=self.config.clob.signature_type,
             )
 
-            # Sign order
-            signed = signer.sign_order(order)
+            # Sign order with API key as owner
+            api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
+            signed = signer.sign_order(order, api_key=api_key)
+
+            # Log physical payload for debugging auth issues
+            logger.debug(f"Order owner field (API Key): {signed.get('owner')}")
+            logger.debug(f"Order maker field: {signed.get('order', {}).get('maker')}")
 
             # Submit to CLOB
-            response = await self._run_in_thread(
-                self.clob_client.post_order,
-                signed,
-                order_type,
-            )
+            try:
+                response = await self._run_in_thread(
+                    self.clob_client.post_order,
+                    signed,
+                    order_type,
+                )
+                
+                # If we get a response, it's already parsed as JSON
+                order_result = OrderResult.from_response(response)
+                if not order_result.success:
+                    error_msg = response.get("errorMsg", "Unknown error")
+                    logger.error(f"Order placement failed: {error_msg}")
+                    logger.debug(f"Raw error response: {response}")
+                return order_result
+            except Exception as e:
+                logger.error(f"Post order exception: {e}")
+                return OrderResult(success=False, message=str(e))
 
             logger.info(
                 f"Order placed: {side} {size}@{price} "

@@ -16,8 +16,15 @@ from pathlib import Path
 from typing import List
 
 # Suppress noisy logs
-logging.getLogger("src.websocket_client").setLevel(logging.WARNING)
-logging.getLogger("src.bot").setLevel(logging.WARNING)
+logging.getLogger("src.websocket_client").setLevel(logging.INFO)
+logging.getLogger("src.bot").setLevel(logging.INFO)
+
+# Setup logging to file if requested
+if os.environ.get("POLY_DEBUG_LOG"):
+    file_handler = logging.FileHandler("bot_debug.log")
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(file_handler)
+    print(f"\n[DEBUG] Detailed logs being written to bot_debug.log\n")
 
 # Auto-load .env file
 from dotenv import load_dotenv
@@ -34,6 +41,10 @@ from apps.flash_crash_strategy import FlashCrashStrategy, FlashCrashConfig
 async def run_strategies(bot: TradingBot, strategies: List[FlashCrashStrategy]):
     """Run multiple strategies concurrently."""
     tasks = [asyncio.create_task(s.run()) for s in strategies]
+    
+    # Start shared WebSocket if available
+    if bot.clob_client and bot.clob_client.ws:
+        tasks.append(asyncio.create_task(bot.clob_client.ws.run_until_cancelled()))
     
     # Hide cursor
     print("\033[?25l", end="")

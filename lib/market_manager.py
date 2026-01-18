@@ -151,6 +151,7 @@ class MarketManager:
         coin: str = "BTC",
         market_check_interval: float = 30.0,
         auto_switch_market: bool = True,
+        ws: Optional['MarketWebSocket'] = None,
     ):
         """
         Initialize market manager.
@@ -159,6 +160,7 @@ class MarketManager:
             coin: Coin symbol (BTC, ETH, SOL, XRP)
             market_check_interval: Seconds between market checks
             auto_switch_market: Auto switch when market changes
+            ws: Shared WebSocket client (optional)
         """
         self.coin = coin.upper()
         self.market_check_interval = market_check_interval
@@ -166,7 +168,7 @@ class MarketManager:
 
         # Clients
         self.gamma = GammaClient()
-        self.ws: Optional[MarketWebSocket] = None
+        self.ws = ws
 
         # State
         self.current_market: Optional[MarketInfo] = None
@@ -320,11 +322,11 @@ class MarketManager:
         return market
 
     async def _setup_websocket(self) -> bool:
-        """Setup WebSocket connection and callbacks."""
-        if not self.current_market:
+        """Setup WebSocket callbacks."""
+        if not self.current_market or not self.ws:
             return False
 
-        self.ws = MarketWebSocket()
+        # Register callbacks on the shared WS
 
         @self.ws.on_book
         async def handle_book(snapshot: OrderbookSnapshot):  # pyright: ignore[reportUnusedFunction]
@@ -357,7 +359,8 @@ class MarketManager:
         # Subscribe to current market tokens
         token_list = list(self.current_market.token_ids.values())
         if token_list:
-            await self.ws.subscribe(token_list, replace=True)
+            # Use replace=False for shared WebSocket to avoid overwriting other coins
+            await self.ws.subscribe(token_list, replace=False)
 
         return True
 
@@ -397,18 +400,25 @@ class MarketManager:
             if not self._should_switch_market(old_market, market):
                 continue
 
-            # Market changed - resubscribe to new tokens
+            # Market changed - calculate deltas
+            to_unsubscribe = list(old_tokens - new_tokens)
+            to_subscribe = list(new_tokens) # Always re-subscribe to ensure presence
+            
             import logging
             mgr_logger = logging.getLogger(__name__)
             mgr_logger.info(f"Market Switching for {self.coin}: {old_slug} -> {market.slug}")
             
-            # Unsubscribe from old tokens if they exist
-            if old_tokens:
-                mgr_logger.debug(f"Unsubscribing from old tokens: {list(old_tokens)}")
-                await self.ws.unsubscribe(list(old_tokens))
+            # Add small jitter to avoid simultaneous hits on shared WS
+            import random
+            await asyncio.sleep(random.uniform(0.1, 0.5))
+
+            # Unsubscribe from truly old tokens
+            if to_unsubscribe:
+                mgr_logger.debug(f"Unsubscribing from {len(to_unsubscribe)} tokens")
+                await self.ws.unsubscribe(to_unsubscribe)
             
-            # Subscribe to new tokens (additive)
-            await self.ws.subscribe(list(new_tokens), replace=False)
+            # Subscribe to new tokens (additive via the new WS logic)
+            await self.ws.subscribe(to_subscribe, replace=False)
             self._update_current_market(market)
             mgr_logger.info(f"Resubscribed to {self.coin} market successfully")
 
@@ -434,13 +444,14 @@ class MarketManager:
             self._running = False
             return False
 
-        # Setup WebSocket
+        # Setup WebSocket callbacks
         if not await self._setup_websocket():
             self._running = False
             return False
 
-        # Start WebSocket in background
-        self._ws_task = asyncio.create_task(self._run_websocket())
+        # Note: In shared WS mode, the caller is responsible for calling ws.run()
+        # but we can still start our background discovery task
+        # self._ws_task = asyncio.create_task(self._run_websocket())
 
         # Start market check loop
         if self.auto_switch_market:

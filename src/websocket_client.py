@@ -245,6 +245,7 @@ class MarketWebSocket:
         self._ws: Optional["WebSocketClientProtocol"] = None
         self._running = False
         self._subscribed_assets: Set[str] = set()
+        self._market_established = False  # Track if MARKET channel is initialized
 
         # Orderbook cache
         self._orderbooks: Dict[str, OrderbookSnapshot] = {}
@@ -373,25 +374,42 @@ class MarketWebSocket:
             # Clear old subscriptions and cached data
             self._subscribed_assets.clear()
             self._orderbooks.clear()
+            self._market_established = False
 
+        # Identify ONLY the new assets if we are already established
+        new_assets = [aid for aid in asset_ids if aid not in self._subscribed_assets]
         self._subscribed_assets.update(asset_ids)
         current_assets = list(self._subscribed_assets)
-        logger.info(f"subscribe() called with {len(asset_ids)} new assets, total assets: {len(current_assets)}")
+        
+        logger.info(f"subscribe() total assets: {len(current_assets)}")
 
         if not self.is_connected:
             # Will subscribe after connect
             logger.info("Not connected yet, will subscribe after connect")
             return True
 
-        subscribe_msg = {
-            "assets_ids": current_assets, # Send ALL active assets
-            "type": "MARKET",
-        }
+        # Decide which message type to send
+        if not self._market_established:
+            # First time or after replace=True: send full list with type: MARKET
+            subscribe_msg = {
+                "assets_ids": current_assets,
+                "type": "MARKET",
+            }
+            self._market_established = True
+        else:
+            # Already established: send only new assets with operation: subscribe
+            if not new_assets:
+                logger.debug("No new assets to subscribe to")
+                return True
+                
+            subscribe_msg = {
+                "assets_ids": new_assets,
+                "operation": "subscribe",
+            }
 
         try:
             msg_json = json.dumps(subscribe_msg)
-            logger.info(f"[WS] Subscribing to {len(current_assets)} assets (replace={replace})")
-            logger.debug(f"[WS] Asset IDs: {current_assets}")
+            logger.info(f"[WS] Sending subscription: {msg_json}")
             await self._ws.send(msg_json)
             logger.info(f"[WS] Subscribe message sent successfully")
             return True
@@ -399,37 +417,6 @@ class MarketWebSocket:
             logger.error(f"Failed to subscribe: {e}")
             if self._on_error:
                 self._on_error(e)
-            return False
-
-    async def subscribe_more(self, asset_ids: List[str]) -> bool:
-        """
-        Subscribe to additional assets.
-
-        Args:
-            asset_ids: Additional token IDs to subscribe to
-
-        Returns:
-            True if subscription sent successfully
-        """
-        if not asset_ids:
-            return False
-
-        self._subscribed_assets.update(asset_ids)
-
-        if not self.is_connected:
-            return True
-
-        subscribe_msg = {
-            "assets_ids": asset_ids,
-            "operation": "subscribe",
-        }
-
-        try:
-            await self._ws.send(json.dumps(subscribe_msg))
-            logger.info(f"Subscribed to {len(asset_ids)} additional assets")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to subscribe: {e}")
             return False
 
     async def unsubscribe(self, asset_ids: List[str]) -> bool:
@@ -462,7 +449,18 @@ class MarketWebSocket:
 
     async def _handle_message(self, data: Dict[str, Any]) -> None:
         """Handle incoming WebSocket message."""
-        event_type = data.get("event_type", "")
+        # Polymarket sometimes omits event_type or uses different names
+        event_type = data.get("event_type", data.get("type", ""))
+        
+        # Try to infer event type if missing
+        if not event_type:
+            if "price_changes" in data:
+                event_type = "price_change"
+            elif "bids" in data or "asks" in data:
+                event_type = "book"
+            elif "side" in data and "price" in data and "size" in data:
+                event_type = "last_trade_price"
+        
         logger.debug(f"Received event: {event_type}, keys: {list(data.keys())}")
 
         if event_type == "book":
@@ -473,27 +471,43 @@ class MarketWebSocket:
 
         elif event_type == "price_change":
             market = data.get("market", "")
-            changes = [
-                PriceChange.from_dict(pc)
-                for pc in data.get("price_changes", [])
-            ]
-            await self._run_callback(
-                self._on_price_change,
-                market,
-                changes,
-                label="price_change",
-            )
+            # Handle both single update and list of updates
+            pc_raw = data.get("price_changes", [])
+            if not pc_raw and "price" in data:
+                # Wrap single update in list
+                pc_raw = [data]
+                
+            changes = []
+            for pc in pc_raw:
+                try:
+                    changes.append(PriceChange.from_dict(pc))
+                except Exception as e:
+                    logger.debug(f"Skipping malformed price change: {e}")
+            
+            if changes:
+                await self._run_callback(
+                    self._on_price_change,
+                    market,
+                    changes,
+                    label="price_change",
+                )
 
         elif event_type == "last_trade_price":
-            trade = LastTradePrice.from_message(data)
-            await self._run_callback(self._on_trade, trade, label="trade")
+            try:
+                trade = LastTradePrice.from_message(data)
+                await self._run_callback(self._on_trade, trade, label="trade")
+            except Exception as e:
+                logger.debug(f"Skipping malformed trade: {e}")
 
         elif event_type == "tick_size_change":
             # Log but don't handle specially
             logger.debug(f"Tick size change: {data}")
 
         else:
-            logger.debug(f"Unknown event type: {event_type}")
+            if "error" in data:
+                logger.error(f"WebSocket error message: {data['error']}")
+            elif data:
+                logger.debug(f"Unhandled message structure: {data}")
 
     async def _run_callback(self, callback: Optional[Callable[..., Any]], *args: Any, label: str) -> None:
         """Run a callback that may be sync or async, logging failures."""
@@ -570,6 +584,7 @@ class MarketWebSocket:
             await self._run_loop()
 
             # Handle disconnect
+            self._market_established = False  # Reset flag on disconnect
             if self._on_disconnect:
                 self._on_disconnect()
 
