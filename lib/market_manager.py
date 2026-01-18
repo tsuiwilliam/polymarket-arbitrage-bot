@@ -398,8 +398,14 @@ class MarketManager:
                 continue
 
             # Market changed - resubscribe to new tokens
+            import logging
+            mgr_logger = logging.getLogger(__name__)
+            mgr_logger.info(f"Market Switching for {self.coin}: {old_slug} -> {market.slug}")
+            mgr_logger.debug(f"Subscribing to new tokens: {list(new_tokens)}")
+            
             await self.ws.subscribe(list(new_tokens), replace=True)
             self._update_current_market(market)
+            mgr_logger.info(f"Resubscribed to {self.coin} market successfully")
 
             # Fire market change callbacks in main thread
             if old_slug and old_slug != market.slug:

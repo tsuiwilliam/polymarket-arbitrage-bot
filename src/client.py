@@ -147,16 +147,20 @@ class ApiClient(ThreadLocalSessionMixin):
                         url, headers=request_headers,
                         params=params, timeout=self.timeout
                     )
-                elif method.upper() == "POST":
-                    response = session.post(
-                        url, headers=request_headers,
-                        json=data, params=params, timeout=self.timeout
-                    )
-                elif method.upper() == "DELETE":
-                    response = session.delete(
-                        url, headers=request_headers,
-                        json=data, params=params, timeout=self.timeout
-                    )
+                elif method.upper() in ("POST", "DELETE"):
+                    # If data is a string, assume it's already serialized JSON
+                    if isinstance(data, str):
+                        response = session.request(
+                            method.upper(),
+                            url, headers=request_headers,
+                            data=data, params=params, timeout=self.timeout
+                        )
+                    else:
+                        response = session.request(
+                            method.upper(),
+                            url, headers=request_headers,
+                            json=data, params=params, timeout=self.timeout
+                        )
                 else:
                     raise ApiError(f"Unsupported method: {method}")
 
@@ -515,7 +519,7 @@ class ClobClient(ApiClient):
         return self._request(
             "POST",
             endpoint,
-            data=body,
+            data=body_json, # Send the EXACT same JSON string used for signature
             headers=headers
         )
 
@@ -537,7 +541,7 @@ class ClobClient(ApiClient):
         return self._request(
             "DELETE",
             endpoint,
-            data=body,
+            data=body_json, # Send the EXACT same JSON string used for signature
             headers=headers
         )
 
