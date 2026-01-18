@@ -6,8 +6,10 @@ import os
 import sys
 from pathlib import Path
 import json
+from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+load_dotenv()  # Load .env file
 
 from src.config import Config
 from src.signer import OrderSigner
