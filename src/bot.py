@@ -55,6 +55,8 @@ Note:
 import os
 import asyncio
 import logging
+import time
+import random
 from typing import Optional, Dict, Any, List, Callable, TypeVar
 from dataclasses import dataclass, field
 from enum import Enum
@@ -347,13 +349,19 @@ class TradingBot:
             if self.config.clob.signature_type == 0 and self.signer:
                 maker_address = self.signer.address
 
-            # Create order
+            # Create order with expiration and salt
+            expiration = int(time.time() + 3600)  # 1 hour expiration
+            salt = random.randint(1, 10**12)      # Random salt for uniqueness
+
             order = Order(
                 token_id=token_id,
                 price=price,
                 size=size,
                 side=side,
                 maker=maker_address,
+                expiration=expiration,
+                salt=salt,
+                nonce=0, # Defaults to 0 in official SDK
                 fee_rate_bps=fee_rate_bps,
                 signature_type=self.config.clob.signature_type,
             )

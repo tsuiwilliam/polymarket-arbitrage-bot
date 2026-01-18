@@ -375,7 +375,8 @@ class MarketWebSocket:
             self._orderbooks.clear()
 
         self._subscribed_assets.update(asset_ids)
-        logger.info(f"subscribe() called with {len(asset_ids)} assets, is_connected={self.is_connected}, ws={self._ws is not None}")
+        current_assets = list(self._subscribed_assets)
+        logger.info(f"subscribe() called with {len(asset_ids)} new assets, total assets: {len(current_assets)}")
 
         if not self.is_connected:
             # Will subscribe after connect
@@ -383,15 +384,15 @@ class MarketWebSocket:
             return True
 
         subscribe_msg = {
-            "assets_ids": asset_ids,
+            "assets_ids": current_assets, # Send ALL active assets
             "type": "MARKET",
         }
 
         try:
             msg_json = json.dumps(subscribe_msg)
-            logger.info(f"Sending subscribe message: {msg_json[:200]}")
+            logger.debug(f"Sending subscribe message: {msg_json}")
             await self._ws.send(msg_json)
-            logger.info(f"Subscribed to {len(asset_ids)} assets successfully")
+            logger.info(f"Subscribed to {len(current_assets)} assets successfully")
             return True
         except Exception as e:
             logger.error(f"Failed to subscribe: {e}")

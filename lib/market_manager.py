@@ -401,9 +401,14 @@ class MarketManager:
             import logging
             mgr_logger = logging.getLogger(__name__)
             mgr_logger.info(f"Market Switching for {self.coin}: {old_slug} -> {market.slug}")
-            mgr_logger.debug(f"Subscribing to new tokens: {list(new_tokens)}")
             
-            await self.ws.subscribe(list(new_tokens), replace=True)
+            # Unsubscribe from old tokens if they exist
+            if old_tokens:
+                mgr_logger.debug(f"Unsubscribing from old tokens: {list(old_tokens)}")
+                await self.ws.unsubscribe(list(old_tokens))
+            
+            # Subscribe to new tokens (additive)
+            await self.ws.subscribe(list(new_tokens), replace=False)
             self._update_current_market(market)
             mgr_logger.info(f"Resubscribed to {self.coin} market successfully")
 
