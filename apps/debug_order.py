@@ -13,9 +13,9 @@ load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-from src.signer import OrderSigner
+from src.signer import OrderSigner, Order
 from src.client import ClobClient
-from src.utils import Order, OrderSignature
+# from src.utils import Order, OrderSignature # Removed invalid import
 
 async def test_order():
     print("--- Testing Order Placement ---")
