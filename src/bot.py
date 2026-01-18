@@ -349,8 +349,8 @@ class TradingBot:
             if self.config.clob.signature_type == 0 and self.signer:
                 maker_address = self.signer.address
 
-            # Create order with expiration and salt
-            expiration = int(time.time() + 3600)  # 1 hour expiration
+            # For GTC orders, expiration must be 0. For GTD, it should be a timestamp.
+            expiration = 0 if order_type == "GTC" else int(time.time() + 3600)
             salt = random.randint(1, 10**12)      # Random salt for uniqueness
 
             order = Order(

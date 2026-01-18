@@ -384,7 +384,7 @@ class MarketWebSocket:
             return True
 
         subscribe_msg = {
-            "assets_ids": current_assets, # Send ALL active assets
+            "assets": current_assets, # Send ALL active assets
             "type": "MARKET",
         }
 
@@ -420,8 +420,8 @@ class MarketWebSocket:
             return True
 
         subscribe_msg = {
-            "assets_ids": asset_ids,
-            "operation": "subscribe",
+            "assets": asset_ids,
+            "type": "MARKET",
         }
 
         try:
@@ -448,8 +448,8 @@ class MarketWebSocket:
         self._subscribed_assets.difference_update(asset_ids)
 
         unsubscribe_msg = {
-            "assets_ids": asset_ids,
-            "operation": "unsubscribe",
+            "assets": list(self._subscribed_assets),
+            "type": "MARKET",
         }
 
         try:
