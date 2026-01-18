@@ -304,12 +304,13 @@ class OrderSigner:
                     "takerAmount": str(order.taker_amount),
                     "expiration": str(order.expiration),
                     "nonce": str(order.nonce),
-                    "feeRateBps": int(order.fee_rate_bps),
+                    "feeRateBps": str(order.fee_rate_bps),
                     "side": order.side,
                     "signatureType": int(order.signature_type),
                     "signature": "0x" + signed.signature.hex(),
                 },
                 "owner": api_key or order.maker,
+                "postOnly": False,
             }
 
         except Exception as e:
