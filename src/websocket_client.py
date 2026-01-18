@@ -384,14 +384,13 @@ class MarketWebSocket:
             return True
 
         subscribe_msg = {
-            "assets_ids": current_assets, # Send ALL active assets
-            "type": "MARKET",
+            "assets_ids": current_assets,
+            "type": "market",
         }
 
         try:
             msg_json = json.dumps(subscribe_msg)
-            logger.info(f"[WS] Subscribing to {len(current_assets)} assets (replace={replace})")
-            logger.debug(f"[WS] Asset IDs: {current_assets}")
+            logger.info(f"[WS] Sending subscription: {msg_json}")
             await self._ws.send(msg_json)
             logger.info(f"[WS] Subscribe message sent successfully")
             return True
@@ -493,7 +492,10 @@ class MarketWebSocket:
             logger.debug(f"Tick size change: {data}")
 
         else:
-            logger.debug(f"Unknown event type: {event_type}")
+            if "error" in data:
+                logger.error(f"WebSocket error message: {data['error']}")
+            else:
+                logger.debug(f"Unknown event type: {event_type}, data: {data}")
 
     async def _run_callback(self, callback: Optional[Callable[..., Any]], *args: Any, label: str) -> None:
         """Run a callback that may be sync or async, logging failures."""

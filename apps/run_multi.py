@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import List
 
 # Suppress noisy logs
-logging.getLogger("src.websocket_client").setLevel(logging.WARNING)
-logging.getLogger("src.bot").setLevel(logging.WARNING)
+logging.getLogger("src.websocket_client").setLevel(logging.INFO)
+logging.getLogger("src.bot").setLevel(logging.INFO)
 
 # Auto-load .env file
 from dotenv import load_dotenv
