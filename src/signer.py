@@ -140,9 +140,10 @@ class OrderSigner:
     }
 
     ORDER_DOMAIN = {
-        "name": "ClobOrderDomain",
+        "name": "Polymarket CLOB Exchange",
         "version": "1",
         "chainId": 137,
+        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
     }
 
     # Order type definition for EIP-712
@@ -270,8 +271,8 @@ class OrderSigner:
             order_message = {
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
-                "signer": self.address,
-                "taker": "0x0000000000000000000000000000000000000000",
+                "signer": to_checksum_address(self.address),
+                "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
                 "takerAmount": int(order.taker_amount),
@@ -308,7 +309,7 @@ class OrderSigner:
                     "signatureType": int(order.signature_type),
                     "signature": "0x" + signed.signature.hex(),
                 },
-                "owner": api_key or order.maker,
+                "owner": to_checksum_address(order.maker), # OWNER MUST BE MAKER ADDRESS
                 "postOnly": False,
             }
 
