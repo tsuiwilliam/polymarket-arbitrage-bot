@@ -44,13 +44,13 @@ def main():
     print(f"   Proxy Address: {proxy_address}")
     print(f"   Signature Type: {config.clob.signature_type}")
     
-    # Initialize client
+    # Initialize client correctly
     clob = ClobClient(
         host=config.clob.host,
-        key=private_key,
         chain_id=config.clob.chain_id,
         signature_type=config.clob.signature_type,
-        funder=eoa_address if config.clob.signature_type == 0 else proxy_address
+        funder=eoa_address if config.clob.signature_type == 0 else proxy_address,
+        api_creds=ApiCredentials.load(creds_file) if creds_file.exists() else None
     )
     
     print(f"\n2. CLIENT CONFIGURATION:")
@@ -58,14 +58,9 @@ def main():
     print(f"   Host: {config.clob.host}")
     
     # Check API credentials
-    creds_file = Path("credentials/api_creds.json")
     if creds_file.exists():
-        with open(creds_file) as f:
-            creds = json.load(f)
         print(f"\n3. API CREDENTIALS (from {creds_file}):")
         print(f"   API Key exists: Yes")
-        print(f"   API Secret exists: Yes")
-        # Don't print the actual values for security
     else:
         print(f"\n3. API CREDENTIALS:")
         print(f"   No cached credentials found at {creds_file}")
@@ -73,8 +68,12 @@ def main():
         
     # Derive/get API key
     try:
-        api_creds = clob.derive_api_key()
-        print(f"   ✓ API key derived successfully")
+        if not clob.api_creds:
+            api_creds = clob.create_or_derive_api_key(signer)
+            clob.set_api_creds(api_creds)
+            print(f"   ✓ API key derived successfully")
+        else:
+            print(f"   ✓ Using existing API key")
     except Exception as e:
         print(f"   ✗ Failed to derive API key: {e}")
         return

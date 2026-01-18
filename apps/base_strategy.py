@@ -109,6 +109,7 @@ class BaseStrategy(ABC):
             coin=config.coin,
             market_check_interval=config.market_check_interval,
             auto_switch_market=config.auto_switch_market,
+            ws=bot.clob_client.ws if bot.clob_client else None
         )
 
         self.prices = PriceTracker(

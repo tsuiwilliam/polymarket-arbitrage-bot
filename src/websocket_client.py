@@ -461,7 +461,18 @@ class MarketWebSocket:
 
     async def _handle_message(self, data: Dict[str, Any]) -> None:
         """Handle incoming WebSocket message."""
-        event_type = data.get("event_type", "")
+        # Polymarket sometimes omits event_type or uses different names
+        event_type = data.get("event_type", data.get("type", ""))
+        
+        # Try to infer event type if missing
+        if not event_type:
+            if "price_changes" in data:
+                event_type = "price_change"
+            elif "bids" in data or "asks" in data:
+                event_type = "book"
+            elif "side" in data and "price" in data and "size" in data:
+                event_type = "last_trade_price"
+        
         logger.debug(f"Received event: {event_type}, keys: {list(data.keys())}")
 
         if event_type == "book":
@@ -472,20 +483,33 @@ class MarketWebSocket:
 
         elif event_type == "price_change":
             market = data.get("market", "")
-            changes = [
-                PriceChange.from_dict(pc)
-                for pc in data.get("price_changes", [])
-            ]
-            await self._run_callback(
-                self._on_price_change,
-                market,
-                changes,
-                label="price_change",
-            )
+            # Handle both single update and list of updates
+            pc_raw = data.get("price_changes", [])
+            if not pc_raw and "price" in data:
+                # Wrap single update in list
+                pc_raw = [data]
+                
+            changes = []
+            for pc in pc_raw:
+                try:
+                    changes.append(PriceChange.from_dict(pc))
+                except Exception as e:
+                    logger.debug(f"Skipping malformed price change: {e}")
+            
+            if changes:
+                await self._run_callback(
+                    self._on_price_change,
+                    market,
+                    changes,
+                    label="price_change",
+                )
 
         elif event_type == "last_trade_price":
-            trade = LastTradePrice.from_message(data)
-            await self._run_callback(self._on_trade, trade, label="trade")
+            try:
+                trade = LastTradePrice.from_message(data)
+                await self._run_callback(self._on_trade, trade, label="trade")
+            except Exception as e:
+                logger.debug(f"Skipping malformed trade: {e}")
 
         elif event_type == "tick_size_change":
             # Log but don't handle specially
@@ -494,8 +518,8 @@ class MarketWebSocket:
         else:
             if "error" in data:
                 logger.error(f"WebSocket error message: {data['error']}")
-            else:
-                logger.debug(f"Unknown event type: {event_type}, data: {data}")
+            elif data:
+                logger.debug(f"Unhandled message structure: {data}")
 
     async def _run_callback(self, callback: Optional[Callable[..., Any]], *args: Any, label: str) -> None:
         """Run a callback that may be sync or async, logging failures."""

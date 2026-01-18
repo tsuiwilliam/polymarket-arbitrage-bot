@@ -35,6 +35,8 @@ import json
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
+from src.websocket_client import MarketWebSocket
+
 import requests
 
 from .config import BuilderConfig
@@ -231,6 +233,7 @@ class ClobClient(ApiClient):
         self.funder = funder
         self.api_creds = api_creds
         self.builder_creds = builder_creds
+        self.ws = MarketWebSocket()  # Initialize shared WebSocket
 
     def _build_headers(
         self,

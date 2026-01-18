@@ -42,6 +42,10 @@ async def run_strategies(bot: TradingBot, strategies: List[FlashCrashStrategy]):
     """Run multiple strategies concurrently."""
     tasks = [asyncio.create_task(s.run()) for s in strategies]
     
+    # Start shared WebSocket if available
+    if bot.clob_client and bot.clob_client.ws:
+        tasks.append(asyncio.create_task(bot.clob_client.ws.run_until_cancelled()))
+    
     # Hide cursor
     print("\033[?25l", end="")
 

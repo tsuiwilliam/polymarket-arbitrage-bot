@@ -370,12 +370,28 @@ class TradingBot:
             api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
             signed = signer.sign_order(order, api_key=api_key)
 
+            # Log physical payload for debugging auth issues
+            logger.debug(f"Order owner field (API Key): {signed.get('owner')}")
+            logger.debug(f"Order maker field: {signed.get('order', {}).get('maker')}")
+
             # Submit to CLOB
-            response = await self._run_in_thread(
-                self.clob_client.post_order,
-                signed,
-                order_type,
-            )
+            try:
+                response = await self._run_in_thread(
+                    self.clob_client.post_order,
+                    signed,
+                    order_type,
+                )
+                
+                # If we get a response, it's already parsed as JSON
+                order_result = OrderResult.from_response(response)
+                if not order_result.success:
+                    error_msg = response.get("errorMsg", "Unknown error")
+                    logger.error(f"Order placement failed: {error_msg}")
+                    logger.debug(f"Raw error response: {response}")
+                return order_result
+            except Exception as e:
+                logger.error(f"Post order exception: {e}")
+                return OrderResult(success=False, message=str(e))
 
             logger.info(
                 f"Order placed: {side} {size}@{price} "

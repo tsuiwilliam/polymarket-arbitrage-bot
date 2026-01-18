@@ -151,6 +151,7 @@ class MarketManager:
         coin: str = "BTC",
         market_check_interval: float = 30.0,
         auto_switch_market: bool = True,
+        ws: Optional['MarketWebSocket'] = None,
     ):
         """
         Initialize market manager.
@@ -159,6 +160,7 @@ class MarketManager:
             coin: Coin symbol (BTC, ETH, SOL, XRP)
             market_check_interval: Seconds between market checks
             auto_switch_market: Auto switch when market changes
+            ws: Shared WebSocket client (optional)
         """
         self.coin = coin.upper()
         self.market_check_interval = market_check_interval
@@ -166,7 +168,7 @@ class MarketManager:
 
         # Clients
         self.gamma = GammaClient()
-        self.ws: Optional[MarketWebSocket] = None
+        self.ws = ws
 
         # State
         self.current_market: Optional[MarketInfo] = None
@@ -320,11 +322,11 @@ class MarketManager:
         return market
 
     async def _setup_websocket(self) -> bool:
-        """Setup WebSocket connection and callbacks."""
-        if not self.current_market:
+        """Setup WebSocket callbacks."""
+        if not self.current_market or not self.ws:
             return False
 
-        self.ws = MarketWebSocket()
+        # Register callbacks on the shared WS
 
         @self.ws.on_book
         async def handle_book(snapshot: OrderbookSnapshot):  # pyright: ignore[reportUnusedFunction]
@@ -434,13 +436,14 @@ class MarketManager:
             self._running = False
             return False
 
-        # Setup WebSocket
+        # Setup WebSocket callbacks
         if not await self._setup_websocket():
             self._running = False
             return False
 
-        # Start WebSocket in background
-        self._ws_task = asyncio.create_task(self._run_websocket())
+        # Note: In shared WS mode, the caller is responsible for calling ws.run()
+        # but we can still start our background discovery task
+        # self._ws_task = asyncio.create_task(self._run_websocket())
 
         # Start market check loop
         if self.auto_switch_market:
