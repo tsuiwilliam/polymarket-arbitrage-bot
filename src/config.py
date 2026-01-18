@@ -41,6 +41,10 @@ import yaml
 # Environment variable prefix
 ENV_PREFIX = "POLY_"
 
+# Common Polymarket Addresses (Polygon)
+CTF_EXCHANGE_ADDRESS = "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599"
+USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+
 
 def get_env(name: str, default: str = "") -> str:
     """Get environment variable with prefix."""

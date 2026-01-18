@@ -626,6 +626,45 @@ class TradingBot:
         except Exception as e:
             logger.warning(f"Safe deployment failed (may already be deployed): {e}")
             return False
+
+    async def approve_usdc_gasless(self, amount: int = 10**12) -> bool:
+        """
+        Approve USDC spending via Builder Relayer.
+        
+        Args:
+            amount: Amount in base units (6 decimals). Default: $1M
+        """
+        if not self.config.use_gasless or not self.relayer_client:
+            return False
+            
+        from src.config import CTF_EXCHANGE_ADDRESS
+        try:
+            response = await self._run_in_thread(
+                self.relayer_client.approve_usdc,
+                self.config.safe_address,
+                CTF_EXCHANGE_ADDRESS,
+                amount
+            )
+            logger.info(f"USDC approval initiated: {response}")
+            return True
+        except Exception as e:
+            logger.error(f"USDC approval failed: {e}")
+            return False
+
+    async def setup_gasless(self) -> Dict[str, bool]:
+        """
+        Perform complete gasless deployment and approval setup.
+        
+        Returns:
+            Dictionary with setup results
+        """
+        results = {"deployed": False, "approved": False}
+        if not self.config.use_gasless:
+            return results
+            
+        results["deployed"] = await self.deploy_safe_if_needed()
+        results["approved"] = await self.approve_usdc_gasless()
+        return results
     async def get_collateral_balance(self) -> float:
         """Get USDC balance."""
         if not self.clob_client:
