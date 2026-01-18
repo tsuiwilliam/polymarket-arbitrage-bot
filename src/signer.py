@@ -308,6 +308,7 @@ class OrderSigner:
                     "side": order.side,
                     "signatureType": int(order.signature_type),
                     "signature": "0x" + signed.signature.hex(),
+                },
                 "owner": api_key, # THE API KEY STRING, NOT THE ADDRESS
                 "postOnly": False,
             }
