@@ -510,16 +510,19 @@ class ClobClient(ApiClient):
         """
         endpoint = "/order"
 
-        # Build request body
-        body = {
-            "order": signed_order.get("order", signed_order),
-            "owner": self.funder,
-            "orderType": order_type,
-        }
-
-        # Add signature
-        if "signature" in signed_order:
-            body["signature"] = signed_order["signature"]
+        # Use the signed order as the base body if it has the required structure
+        if isinstance(signed_order, dict) and "order" in signed_order:
+            body = signed_order.copy()
+            # Ensure orderType is set correctly
+            if order_type:
+                body["orderType"] = order_type
+        else:
+            # Fallback for legacy format
+            body = {
+                "order": signed_order,
+                "owner": self.funder,
+                "orderType": order_type,
+            }
 
         body_json = json.dumps(body, separators=(',', ':'))
         headers = self._build_headers("POST", endpoint, body_json)

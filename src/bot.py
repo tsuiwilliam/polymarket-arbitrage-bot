@@ -361,12 +361,13 @@ class TradingBot:
                 maker=maker_address,
                 expiration=expiration,
                 salt=salt,
+                nonce=0, # Defaults to 0 in official SDK
                 fee_rate_bps=fee_rate_bps,
                 signature_type=self.config.clob.signature_type,
             )
 
-            # Sign order
-            signed = signer.sign_order(order)
+            # Sign order (passing API Key as owner)
+            signed = signer.sign_order(order, owner=self.config.builder.api_key)
 
             # Submit to CLOB
             response = await self._run_in_thread(

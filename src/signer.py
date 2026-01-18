@@ -246,21 +246,12 @@ class OrderSigner:
         signed = self.wallet.sign_message(signable)
         return "0x" + signed.signature.hex()
 
-    def sign_order(self, order: Order) -> Dict[str, Any]:
+    def sign_order(self, order: Order, owner: Optional[str] = None) -> Dict[str, Any]:
         """
         Sign a Polymarket order.
-
-        Args:
-            order: Order instance to sign
-
-        Returns:
-            Dictionary containing order and signature
-
-        Raises:
-            SignerError: If signing fails
         """
         try:
-            # Build order message for EIP-712
+            # Build order message for EIP-712 (values MUST follow ORDER_TYPES)
             order_message = {
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
@@ -272,7 +263,7 @@ class OrderSigner:
                 "expiration": order.expiration,
                 "nonce": order.nonce,
                 "feeRateBps": order.fee_rate_bps,
-                "side": order.side_value,
+                "side": order.side_value, # side as int (0/1) for signature
                 "signatureType": order.signature_type,
             }
 
@@ -285,25 +276,26 @@ class OrderSigner:
 
             signed = self.wallet.sign_message(signable)
 
+            # Return the JSON payload structure required by POST /order
             return {
                 "order": {
-                    "salt": str(order.salt),
-                    "maker": order.maker,
-                    "signer": self.address,
+                    "salt": order.salt, # integer
+                    "maker": order.maker, # string address
+                    "signer": self.address, # string address
                     "taker": "0x0000000000000000000000000000000000000000",
-                    "tokenId": str(order.token_id),
-                    "makerAmount": str(order.maker_amount),
-                    "takerAmount": str(order.taker_amount),
-                    "expiration": str(order.expiration),
-                    "nonce": str(order.nonce),
-                    "feeRateBps": str(order.fee_rate_bps),
-                    "side": order.side_value, # side as int inside order
-                    "signatureType": order.signature_type,
+                    "tokenId": str(order.token_id), # string
+                    "makerAmount": str(order.maker_amount), # string
+                    "takerAmount": str(order.taker_amount), # string
+                    "expiration": str(order.expiration), # string
+                    "nonce": str(order.nonce), # string
+                    "feeRateBps": str(order.fee_rate_bps), # string
+                    "side": order.side, # string "BUY" or "SELL"
+                    "signatureType": order.signature_type, # integer
+                    "signature": "0x" + signed.signature.hex(), # string
                 },
-                "owner": order.maker,
-                "price": f"{order.price:.4f}",
-                "side": order.side, # side as string (BUY/SELL) top-level
-                "signature": "0x" + signed.signature.hex(),
+                "owner": owner or order.maker, # API Key if provided, else address
+                "orderType": "GTC",
+                "postOnly": False
             }
 
         except Exception as e:
