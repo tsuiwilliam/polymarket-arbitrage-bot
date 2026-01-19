@@ -414,7 +414,7 @@ class TradingBot:
                             expiration=0,
                             salt=random.randint(1, 10**12),
                             nonce=None,
-                            fee_rate_bps=0,
+                            fee_rate_bps=1000,  # 10% maker fee (1000 basis points)
                             signature_type=self.config.clob.signature_type,
                         )
                         
