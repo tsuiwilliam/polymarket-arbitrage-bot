@@ -444,6 +444,24 @@ class ClobClient(ApiClient):
             params={"token_id": token_id}
         )
 
+    def get_fee_rate(self, token_id: str) -> int:
+        """
+        Get the fee rate for a specific token/market.
+        
+        Args:
+            token_id: Token ID
+            
+        Returns:
+            Fee rate in basis points (e.g., 1000 = 10%, 0 = fee-free)
+        """
+        endpoint = f"/fee-rate?token_id={token_id}"
+        try:
+            response = self._request("GET", endpoint)
+            return int(response.get("fee_rate_bps", 0))
+        except Exception:
+            # Default to 0 if endpoint fails
+            return 0
+
     def get_open_orders(self) -> List[Dict[str, Any]]:
         """
         Get all open orders for the funder.

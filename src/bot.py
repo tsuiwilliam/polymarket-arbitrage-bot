@@ -541,6 +541,20 @@ class TradingBot:
             if self.config.clob.signature_type == 0 and self.signer:
                 maker_address = self.signer.address
 
+            # Fetch fee rate from API if not explicitly provided (or if default value)
+            # This ensures we use the correct per-market fee rate
+            if fee_rate_bps == 1000:  # Default value, fetch actual rate
+                try:
+                    actual_fee_rate = await self._run_in_thread(
+                        self.clob_client.get_fee_rate,
+                        token_id
+                    )
+                    logger.info(f"Fetched fee rate for token {token_id[:8]}...: {actual_fee_rate} bps")
+                    fee_rate_bps = actual_fee_rate
+                except Exception as e:
+                    logger.warning(f"Failed to fetch fee rate, using default: {e}")
+                    # Keep the default 1000
+
             # For GTC orders, expiration must be 0. For GTD, it should be a timestamp.
             expiration = 0 if order_type == "GTC" else int(time.time() + 3600)
             salt = random.randint(1, 10**12)      # Random salt for uniqueness
