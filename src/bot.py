@@ -387,19 +387,20 @@ class TradingBot:
                 await self.approve_usdc_gasless()
                 logger.info("✓ Proxy setup (deployment/approval) initiated.")
                 
-                # 3b. Test order placement (validate Builder auth works)
-                logger.info("Testing order placement authentication...")
+                # 3b. Test order placement (validate auth works end-to-end)
+                logger.info("Testing order placement authentication with live API call...")
                 try:
-                    # Create a test order (we won't submit it, just validate signing and headers)
+                    # Create a test order with impossible price to avoid execution
                     test_token_id = "99914208981568816645551301561974062576963636618104166856807686031985202521238"  # BTC UP
                     
                     from src.signer import Order
                     import random
+                    import json
                     
                     test_order = Order(
                         token_id=test_token_id,
-                        price=0.01,  # Very low price to avoid accidental execution
-                        size=0.01,   # Minimal size
+                        price=0.001,  # Extremely low price - will never match
+                        size=0.01,    # Minimal size (1 cent)
                         side="BUY",
                         maker=self.config.safe_address,
                         expiration=0,
@@ -409,21 +410,52 @@ class TradingBot:
                         signature_type=self.config.clob.signature_type,
                     )
                     
-                    # Sign with Proxy address as owner
-                    api_key = self.config.safe_address
+                    # Sign the order
+                    api_key = self.config.safe_address if self.config.clob.signature_type == 2 else self.clob_client.api_creds.api_key
                     signed = self.signer.sign_order(test_order, api_key=api_key)
                     
-                    # Build headers to verify Builder credentials are included
-                    import json
+                    # Build headers
                     body_json = json.dumps(signed, separators=(',', ':'))
                     headers = self.clob_client._build_headers("POST", "/order", body_json)
                     
-                    if "POLY_BUILDER_API_KEY" not in headers:
-                        logger.error("✗ Builder credentials NOT included in order headers!")
-                        logger.error("   This will cause 401 errors when placing orders.")
-                        success = False
-                    else:
-                        logger.info("✓ Order authentication validated (Builder credentials present)")
+                    # Log headers for debugging
+                    logger.info(f"Test order headers: {list(headers.keys())}")
+                    if "POLY_BUILDER_API_KEY" in headers:
+                        logger.info("  ✓ Builder credentials included")
+                    if "POLY_API_KEY" in headers:
+                        logger.info(f"  ✓ User L2 credentials included (POLY_ADDRESS: {headers.get('POLY_ADDRESS', 'N/A')})")
+                    
+                    # Actually POST the test order to the server
+                    logger.info("Submitting test order to Polymarket API...")
+                    try:
+                        response = await self._run_in_thread(
+                            self.clob_client.post_order,
+                            signed,
+                            "GTC"
+                        )
+                        logger.info(f"✓ Test order ACCEPTED! Order ID: {response.get('orderID', 'N/A')}")
+                        logger.info("  Authentication is working correctly!")
+                        # Cancel the test order immediately
+                        try:
+                            await self._run_in_thread(
+                                self.clob_client.cancel_order,
+                                response.get('orderID')
+                            )
+                            logger.info("  Test order cancelled successfully")
+                        except:
+                            pass  # Ignore cancel errors
+                    except Exception as post_error:
+                        error_msg = str(post_error)
+                        logger.error(f"✗ Test order REJECTED: {error_msg}")
+                        if "401" in error_msg or "Unauthorized" in error_msg:
+                            logger.error("  → Authentication failure - credentials are invalid or mismatched")
+                            logger.error(f"  → Check that POLY_ADDRESS matches the address used to derive API key")
+                            success = False
+                        elif "400" in error_msg:
+                            logger.warning("  → Order format issue (but auth might be OK)")
+                        else:
+                            logger.error(f"  → Unexpected error: {error_msg}")
+                            success = False
                         
                 except Exception as e:
                     logger.error(f"✗ Order validation failed: {e}")
