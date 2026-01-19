@@ -143,7 +143,7 @@ class OrderSigner:
         "name": "Polymarket CLOB Exchange",
         "version": "1",
         "chainId": 137,
-        "verifyingContract": "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E", # Update to Exchange address found in docs
+        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
     }
 
     # Order type definition for EIP-712
