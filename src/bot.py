@@ -551,17 +551,24 @@ class TradingBot:
 
             # Fetch fee rate from API if not explicitly provided (or if default value)
             # This ensures we use the correct per-market fee rate
+            logger.info(f"[FEE] place_order called with fee_rate_bps={fee_rate_bps}")
             if fee_rate_bps == 1000:  # Default value, fetch actual rate
+                logger.info(f"[FEE] Fetching actual fee rate for token {token_id[:8]}...")
                 try:
                     actual_fee_rate = await self._run_in_thread(
                         self.clob_client.get_fee_rate,
                         token_id
                     )
-                    logger.info(f"Fetched fee rate for token {token_id[:8]}...: {actual_fee_rate} bps")
+                    logger.info(f"[FEE] API returned fee rate: {actual_fee_rate} bps")
                     fee_rate_bps = actual_fee_rate
                 except Exception as e:
-                    logger.warning(f"Failed to fetch fee rate, using default: {e}")
+                    logger.error(f"[FEE] Failed to fetch fee rate: {e}")
+                    logger.error(f"[FEE] Keeping default 1000 bps")
                     # Keep the default 1000
+            else:
+                logger.info(f"[FEE] Using explicitly provided fee_rate_bps={fee_rate_bps}")
+            
+            logger.info(f"[FEE] Final fee_rate_bps for order: {fee_rate_bps}")
 
             # For GTC orders, expiration must be 0. For GTD, it should be a timestamp.
             expiration = 0 if order_type == "GTC" else int(time.time() + 3600)
