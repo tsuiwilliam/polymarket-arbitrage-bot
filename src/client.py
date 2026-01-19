@@ -690,6 +690,20 @@ class ClobClient(ApiClient):
             logger.info(f"[BALANCE] Returning cached balance: ${self._balance_cache:.2f}")
             return self._balance_cache
         
+        # For Proxy wallets (sig type 2), always use on-chain query
+        # The API returns balance based on auth headers (EOA), not the funder address
+        if self.signature_type == 2:
+            logger.info("[BALANCE] Signature type 2 (Proxy) - using on-chain query")
+            try:
+                balance = self._get_onchain_usdc_balance()
+                self._balance_cache = balance
+                self._balance_cache_time = time.time()
+                return balance
+            except Exception as e:
+                logger.warning(f"[BALANCE] On-chain query failed: {e}")
+                return self._balance_cache if self._balance_cache > 0 else 0.0
+        
+        # For EOA wallets, try API first
         try:
             endpoint = "/balance-allowance"
             params = {"asset_type": "COLLATERAL"}
