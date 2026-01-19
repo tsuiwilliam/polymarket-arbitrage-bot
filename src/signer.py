@@ -139,10 +139,11 @@ class OrderSigner:
         "chainId": 137,
     }
 
-    # Polymarket CTF Exchange (NegRisk) on Polygon
-    # Most active markets use the NegRisk adapter/exchange
-    VERIFYING_CONTRACT = "0xC5d563A36AE78145C45a50134d48A1215220f80a" # NegRisk Exchange
-    # VERIFYING_CONTRACT = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" # Standard Exchange
+    # Polymarket CTF Exchange on Polygon (Standard non-NegRisk markets)
+    # IMPORTANT: Must match the actual exchange contract for the market being traded!
+    # Standard markets use: 0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
+    # NegRisk markets use:  0xC5d563A36AE78145C45a50134d48A1215220f80a
+    VERIFYING_CONTRACT = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"  # Standard Exchange
 
     ORDER_DOMAIN = {
         "name": "Polymarket CTF Exchange",
