@@ -305,7 +305,8 @@ class OrderSigner:
                 "order": {
                     "salt": order.salt,
                     "maker": to_checksum_address(order.maker),
-                    "signer": to_checksum_address(self.address),
+                    # The JSON payload's 'signer' field MUST match the one used in the EIP-712 struct
+                    "signer": to_checksum_address(order.maker) if order.signature_type in [1, 2] else to_checksum_address(self.address),
                     "taker": "0x0000000000000000000000000000000000000000",
                     "tokenId": str(order.token_id),
                     "makerAmount": str(order.maker_amount),
