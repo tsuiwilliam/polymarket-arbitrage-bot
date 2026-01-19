@@ -457,16 +457,19 @@ class ClobClient(ApiClient):
         import logging
         logger = logging.getLogger(__name__)
         
-        endpoint = f"/fee-rate?token_id={token_id}"
         try:
-            response = self._request("GET", endpoint)
+            # Use params dict instead of query string in endpoint
+            response = self._request("GET", "/fee-rate", params={"token_id": token_id})
             fee_rate = int(response.get("fee_rate_bps", 0))
-            logger.info(f"Fee rate API response for {token_id[:8]}...: {response}")
+            logger.info(f"Fee rate for token {token_id[:8]}...: {fee_rate} bps (response: {response})")
+            
+            if fee_rate == 0:
+                logger.warning(f"API returned 0 bps for token {token_id[:8]}... - this may be incorrect!")
+            
             return fee_rate
         except Exception as e:
-            logger.warning(f"Fee rate query failed for {token_id[:8]}...: {e}")
-            # Default to 1000 (10%) if endpoint fails - safer than 0
-            return 1000
+            logger.error(f"Fee rate query FAILED for {token_id[:8]}...: {e}")
+            raise  # Don't hide errors - fail loudly so we can fix the root cause
 
     def get_open_orders(self) -> List[Dict[str, Any]]:
         """
