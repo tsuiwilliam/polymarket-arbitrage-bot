@@ -272,9 +272,9 @@ class OrderSigner:
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
                 # For Gnosis Safe (Type 2), the 'signer' field in the EIP-712 struct
-                # might need to match the maker (Safe) address, or be the EOA.
-                # Standard Polymarket behavior: signer field is the address signing the data.
-                "signer": to_checksum_address(self.address), 
+                # MUST be the Safe address (maker), not the EOA.
+                # The EOA signs the hash of this struct.
+                "signer": to_checksum_address(order.maker) if order.signature_type in [1, 2] else to_checksum_address(self.address),
                 "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
@@ -288,7 +288,7 @@ class OrderSigner:
 
             # DEBUG: For Signature Type 2, sometimes 'signer' must be the Maker
             if order.signature_type == 2:
-                 # Override signer to be maker? No, let's keep EOA first but ensure valid checksums
+                 # Override signer to be maker? Yes, done above.
                  pass
 
             # Sign the order using ORDER_DOMAIN
