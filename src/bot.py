@@ -478,10 +478,9 @@ class TradingBot:
                             else:
                                 logger.error(f"  → Unexpected error: {error_msg}")
                                 success = False
-                        
-                except Exception as e:
-                    logger.error(f"✗ Order validation failed: {e}")
-                    success = False
+                    except Exception as e:
+                        logger.error(f"✗ Order validation failed: {e}")
+                        success = False
 
         # 4. Check Balance
         try:
