@@ -234,6 +234,11 @@ class ClobClient(ApiClient):
         self.api_creds = api_creds
         self.builder_creds = builder_creds
         self.ws = MarketWebSocket()  # Initialize shared WebSocket
+        
+        # Balance cache to avoid rate limiting on RPC calls
+        self._balance_cache = 0.0
+        self._balance_cache_time = 0.0
+        self._balance_cache_ttl = 30.0  # Cache for 30 seconds
 
     def _build_headers(
         self,
@@ -648,10 +653,17 @@ class ClobClient(ApiClient):
     def get_collateral_balance(self) -> float:
         """
         Get USDC/Collateral balance.
+        Uses 30-second cache to avoid rate limiting on RPC calls.
         
         Returns:
             Balance as float (USDC)
         """
+        import time
+        
+        # Check cache first
+        if time.time() - self._balance_cache_time < self._balance_cache_ttl:
+            return self._balance_cache
+        
         try:
             endpoint = "/balance-allowance"
             params = {"asset_type": "COLLATERAL"}
@@ -661,7 +673,12 @@ class ClobClient(ApiClient):
             
             # Response format: {"balance": "1000000", "allowances": ...}
             raw_balance = res.get("balance", "0")
-            return float(raw_balance) / 1_000_000 # USDC has 6 decimals
+            balance = float(raw_balance) / 1_000_000 # USDC has 6 decimals
+            
+            # Update cache
+            self._balance_cache = balance
+            self._balance_cache_time = time.time()
+            return balance
         except Exception as e:
             # Log the error for debugging
             import logging
@@ -672,12 +689,18 @@ class ClobClient(ApiClient):
             if "401" in str(e) or "Unauthorized" in str(e):
                 logger.info("API balance check failed (no L2 API key), querying blockchain directly...")
                 try:
-                    return self._get_onchain_usdc_balance()
+                    balance = self._get_onchain_usdc_balance()
+                    # Update cache
+                    self._balance_cache = balance
+                    self._balance_cache_time = time.time()
+                    return balance
                 except Exception as e2:
                     logger.warning(f"On-chain balance query also failed: {e2}")
             else:
                 logger.warning(f"Failed to get collateral balance: {e}")
-        return 0.0
+        
+        # Return cached value if available, otherwise 0
+        return self._balance_cache if self._balance_cache > 0 else 0.0
     
     def _get_onchain_usdc_balance(self) -> float:
         """
