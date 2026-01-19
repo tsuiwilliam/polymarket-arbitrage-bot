@@ -536,6 +536,15 @@ class ClobClient(ApiClient):
 
         body_json = json.dumps(body, separators=(',', ':'))
         headers = self._build_headers("POST", endpoint, body_json)
+        
+        # Debug: Log headers to diagnose 401 errors
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"POST /order headers: {list(headers.keys())}")
+        if "POLY_BUILDER_API_KEY" in headers:
+            logger.debug("  ✓ Builder credentials included")
+        else:
+            logger.warning("  ✗ Builder credentials MISSING from order request!")
 
         return self._request(
             "POST",
