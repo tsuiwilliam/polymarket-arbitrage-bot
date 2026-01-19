@@ -139,11 +139,16 @@ class OrderSigner:
         "chainId": 137,
     }
 
+    # Polymarket CTF Exchange (NegRisk) on Polygon
+    # Most active markets use the NegRisk adapter/exchange
+    VERIFYING_CONTRACT = "0xC5d563A36AE78145C45a50134d48A1215220f80a" # NegRisk Exchange
+    # VERIFYING_CONTRACT = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" # Standard Exchange
+
     ORDER_DOMAIN = {
-        "name": "Polymarket CLOB Exchange",
+        "name": "Polymarket CTF Exchange",
         "version": "1",
         "chainId": 137,
-        "verifyingContract": "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E", # Standard CTF Exchange
+        "verifyingContract": VERIFYING_CONTRACT,
     }
 
     # Order type definition for EIP-712
@@ -181,11 +186,12 @@ class OrderSigner:
             private_key = private_key[2:]
 
         try:
-            self.wallet = Account.from_key(f"0x{private_key}")
+            self.private_key = private_key
+            self.account = Account.from_key(f"0x{private_key}")
         except Exception as e:
             raise ValueError(f"Invalid private key: {e}")
 
-        self.address = self.wallet.address
+        self.address = self.account.address
 
     @classmethod
     def from_encrypted(
