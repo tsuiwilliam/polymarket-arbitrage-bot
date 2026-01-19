@@ -662,8 +662,10 @@ class ClobClient(ApiClient):
             # Response format: {"balance": "1000000", "allowances": ...}
             raw_balance = res.get("balance", "0")
             return float(raw_balance) / 1_000_000 # USDC has 6 decimals
-        except Exception:
-            pass
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to get collateral balance: {e}")
         return 0.0
 
 
