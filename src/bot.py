@@ -391,16 +391,15 @@ class TradingBot:
                 # 3b. Test order placement (validate auth works end-to-end)
                 logger.info("Testing order placement authentication with live API call...")
                 
-                # Use validation token if provided, otherwise skip test order
-                # Real orders will be tested when the bot runs
-                if hasattr(self, '_validation_token_id') and self._validation_token_id:
+                # Require validation token - we need to test auth before real trades
+                if not hasattr(self, '_validation_token_id') or not self._validation_token_id:
+                    logger.error("✗ No validation token provided - cannot test order placement")
+                    logger.error("  Market fetch failed - check network/API connectivity")
+                    success = False
+                else:
                     test_token_id = self._validation_token_id
                     logger.info(f"Using provided market token for test order validation")
-                else:
-                    logger.info("⚠ Skipping test order validation - will validate with real orders")
-                    test_token_id = None
                 
-                if test_token_id:
                     try:
                         from src.signer import Order
                         import random
