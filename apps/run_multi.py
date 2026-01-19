@@ -252,26 +252,7 @@ def main():
         print(f"{Colors.RED}Failed to initialize bot. Check your private key.{Colors.RESET}")
         sys.exit(1)
 
-    # Sanity check at startup
-    if not asyncio.run(bot.verify_setup()):
-        print(f"{Colors.RED}Startup checks failed. Please check your credentials and balance.{Colors.RESET}")
-        # We don't necessarily want to exit if balance is low, 
-        # but if we can't even get orders, we should exit.
-        auth_working = False
-        try:
-            asyncio.run(bot._run_in_thread(bot.clob_client.get_open_orders))
-            auth_working = True
-        except:
-             pass
-        
-        if not auth_working:
-             print(f"{Colors.RED}Fatal: Could not authenticate with Polymarket. Exiting.{Colors.RESET}")
-             sys.exit(1)
-        
-        print(f"{Colors.YELLOW}Proceeding anyway in 3 seconds...{Colors.RESET}")
-        time.sleep(3)
-    
-    # Fetch the first market using the same logic as the main bot
+    # Fetch the first market BEFORE validation so token is available
     first_coin = coins[0] if coins else "BTC"
     print(f"{Colors.CYAN}Fetching {first_coin} market for validation...{Colors.RESET}")
     
@@ -315,6 +296,27 @@ def main():
             print(f"{Colors.RED}✗ Could not fetch {first_coin} market, validation will fail{Colors.RESET}")
     except Exception as e:
         print(f"{Colors.RED}✗ Error fetching market: {e}{Colors.RESET}")
+
+    # Sanity check at startup
+    if not asyncio.run(bot.verify_setup()):
+        print(f"{Colors.RED}Startup checks failed. Please check your credentials and balance.{Colors.RESET}")
+        # We don't necessarily want to exit if balance is low, 
+        # but if we can't even get orders, we should exit.
+        auth_working = False
+        try:
+            asyncio.run(bot._run_in_thread(bot.clob_client.get_open_orders))
+            auth_working = True
+        except:
+             pass
+        
+        if not auth_working:
+             print(f"{Colors.RED}Fatal: Could not authenticate with Polymarket. Exiting.{Colors.RESET}")
+             sys.exit(1)
+        
+        print(f"{Colors.YELLOW}Proceeding anyway in 3 seconds...{Colors.RESET}")
+        time.sleep(3)
+    
+
     
     # Wait for user confirmation before starting
     print(f"\n{Colors.CYAN}{'='*80}{Colors.RESET}")
