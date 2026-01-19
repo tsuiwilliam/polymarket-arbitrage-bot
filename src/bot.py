@@ -471,13 +471,13 @@ class TradingBot:
                             logger.error(f"✗ Test order REJECTED: {error_msg}")
                             if "401" in error_msg or "Unauthorized" in error_msg:
                                 logger.error("  → Authentication failure - credentials are invalid or mismatched")
-                            logger.error(f"  → Check that POLY_ADDRESS matches the address used to derive API key")
-                            success = False
-                        elif "400" in error_msg:
-                            logger.warning("  → Order format issue (but auth might be OK)")
-                        else:
-                            logger.error(f"  → Unexpected error: {error_msg}")
-                            success = False
+                                logger.error(f"  → Check that POLY_ADDRESS matches the address used to derive API key")
+                                success = False
+                            elif "400" in error_msg:
+                                logger.warning("  → Order format issue (but auth might be OK)")
+                            else:
+                                logger.error(f"  → Unexpected error: {error_msg}")
+                                success = False
                         
                 except Exception as e:
                     logger.error(f"✗ Order validation failed: {e}")
