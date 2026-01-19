@@ -305,8 +305,13 @@ class ClobClient(ApiClient):
                     hashlib.sha256
                 ).hexdigest()
 
+            # CRITICAL: POLY_ADDRESS must match the address used to derive the API key
+            # API keys are derived using the EOA signer, so POLY_ADDRESS = EOA address
+            # even in Proxy mode. The funder (Proxy) is specified in the order payload.
+            poly_address = self.api_creds.api_key.split("-")[0] if "-" in self.api_creds.api_key else self.funder
+
             headers.update({
-                "POLY_ADDRESS": self.funder,
+                "POLY_ADDRESS": poly_address,
                 "POLY_API_KEY": self.api_creds.api_key,
                 "POLY_TIMESTAMP": timestamp,
                 "POLY_PASSPHRASE": self.api_creds.passphrase,
