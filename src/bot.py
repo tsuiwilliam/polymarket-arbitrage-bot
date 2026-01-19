@@ -407,8 +407,8 @@ class TradingBot:
                         
                         test_order = Order(
                             token_id=test_token_id,
-                            price=0.01,   # Low but realistic price - won't match typical market prices
-                            size=0.01,    # Minimal size (1 cent)
+                            price=0.01,   # Low price to avoid matching
+                            size=5.0,     # Minimum size requirement ($5)
                             side="BUY",
                             maker=self.config.safe_address,
                             expiration=0,

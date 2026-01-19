@@ -99,17 +99,27 @@ class Order:
         # Convert to integers for blockchain
         # BUY: Maker gives USDC (price*size), Maker receives Token (size)
         # SELL: Maker gives Token (size), Maker receives USDC (price*size)
+        # IMPORTANT: Polymarket has decimal precision limits:
+        #   - BUY orders: maker amount (USDC) max 4 decimals, taker amount (tokens) max 2 decimals
+        #   - SELL orders: maker amount (tokens) max 2 decimals, taker amount (USDC) max 4 decimals
+        
         if self.side == "BUY":
-            # Maker gives USDC
-            self.maker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
-            # Maker receives Token
-            self.taker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
+            # Maker gives USDC - round to 4 decimals before converting to raw amount
+            usdc_amount = round(self.size * self.price, 4)
+            self.maker_amount = str(int(usdc_amount * 10**USDC_DECIMALS))
+            
+            # Maker receives Token - round to 2 decimals before converting to raw amount
+            token_amount = round(self.size, 2)
+            self.taker_amount = str(int(token_amount * 10**USDC_DECIMALS))
             self.side_value = 0
         else:
-            # Maker gives Token
-            self.maker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
-            # Maker receives USDC
-            self.taker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
+            # Maker gives Token - round to 2 decimals before converting to raw amount
+            token_amount = round(self.size, 2)
+            self.maker_amount = str(int(token_amount * 10**USDC_DECIMALS))
+            
+            # Maker receives USDC - round to 4 decimals before converting to raw amount
+            usdc_amount = round(self.size * self.price, 4)
+            self.taker_amount = str(int(usdc_amount * 10**USDC_DECIMALS))
             self.side_value = 1
 
 
