@@ -269,6 +269,11 @@ def main():
         
         print(f"{Colors.YELLOW}Proceeding anyway in 3 seconds...{Colors.RESET}")
         time.sleep(3)
+    
+    # Wait for user confirmation before starting
+    print(f"\n{Colors.CYAN}{'='*80}{Colors.RESET}")
+    input(f"{Colors.BOLD}Validation complete. Press Enter to start trading (or Ctrl+C to cancel)...{Colors.RESET} ")
+    print(f"{Colors.CYAN}{'='*80}{Colors.RESET}\n")
 
     strategies = []
     for coin in coins:
