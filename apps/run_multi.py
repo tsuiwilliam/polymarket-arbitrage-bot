@@ -271,24 +271,37 @@ def main():
         print(f"{Colors.YELLOW}Proceeding anyway in 3 seconds...{Colors.RESET}")
         time.sleep(3)
     
-    # Fetch the first market to use for validation
+    # Fetch the first market using the same logic as the main bot
     first_coin = coins[0] if coins else "BTC"
     print(f"{Colors.CYAN}Fetching {first_coin} market for validation...{Colors.RESET}")
     try:
-        from src.gamma_client import GammaClient
-        gamma = GammaClient()
-        # Fetch active 15-minute markets for the coin
-        markets = asyncio.run(gamma.get_15min_markets(first_coin))
-        if markets and len(markets) > 0:
-            # Use the first active market's UP token
-            market = markets[0]
-            if 'tokens' in market and len(market['tokens']) > 0:
-                bot._validation_token_id = market['tokens'][0]['token_id']
+        # Create a temporary strategy to fetch the market
+        temp_cfg = FlashCrashConfig(
+            coin=first_coin,
+            size=0.01,
+            drop_threshold=0.20,
+            take_profit=0.05,
+            stop_loss=0.10,
+            render_enabled=False
+        )
+        temp_strategy = FlashCrashStrategy(bot, temp_cfg)
+        
+        # Wait for market to be fetched
+        await_time = 0
+        while not temp_strategy.market.current_market and await_time < 5:
+            asyncio.run(asyncio.sleep(0.5))
+            await_time += 0.5
+        
+        if temp_strategy.market.current_market and temp_strategy.market.token_ids:
+            # Use the UP token for validation
+            token_id = temp_strategy.market.token_ids.get('up')
+            if token_id:
+                bot._validation_token_id = token_id
                 print(f"{Colors.GREEN}✓ Using {first_coin} market for validation{Colors.RESET}")
             else:
-                print(f"{Colors.RED}✗ Market has no tokens, validation will fail{Colors.RESET}")
+                print(f"{Colors.RED}✗ Market has no UP token, validation will fail{Colors.RESET}")
         else:
-            print(f"{Colors.RED}✗ No active {first_coin} markets found, validation will fail{Colors.RESET}")
+            print(f"{Colors.RED}✗ Could not fetch {first_coin} market, validation will fail{Colors.RESET}")
     except Exception as e:
         print(f"{Colors.RED}✗ Error fetching market: {e}{Colors.RESET}")
     
