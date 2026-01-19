@@ -167,6 +167,43 @@ def main():
         print(f"{Colors.RED}Error: POLY_PRIVATE_KEY is missing in .env{Colors.RESET}")
         sys.exit(1)
 
+    # --- RESET ENV WIZARD ---
+    print(f"\n{Colors.CYAN}Current Configuration:{Colors.RESET}")
+    print(f"  Wallet: {private_key[-6:]} (Private Key)")
+    
+    do_reset = input(f"{Colors.BOLD}Do you want to RESET/RECONFIGURE your environment credentials? (y/n): {Colors.RESET}").strip().lower()
+    if do_reset in ('y', 'yes'):
+        print(f"\n{Colors.YELLOW}--- RESETTING CREDENTIALS ---{Colors.RESET}")
+        
+        # 1. Private Key
+        new_pk = input("Enter your Private Key: ").strip().replace('"', '').replace("'", "")
+        if new_pk:
+            private_key = new_pk
+            os.environ["POLY_PRIVATE_KEY"] = new_pk
+        
+        # 2. Master Builder
+        print(f"\n{Colors.BOLD}Do you want to set up Master Builder (Gasless) credentials? (y/n): {Colors.RESET}")
+        do_mb = input().strip().lower()
+        if do_mb in ('y', 'yes'):
+            m_key = input("Builder API Key: ").strip()
+            m_secret = input("Builder API Secret: ").strip()
+            m_pass = input("Builder API Passphrase: ").strip()
+            
+            if m_key and m_secret and m_pass:
+                os.environ["POLY_MASTER_BUILDER_KEY"] = m_key
+                os.environ["POLY_MASTER_BUILDER_SECRET"] = m_secret
+                os.environ["POLY_MASTER_BUILDER_PASSPHRASE"] = m_pass
+                # Reset standard builder keys too just in case
+                if os.environ.get("POLY_BUILDER_API_KEY"):
+                    del os.environ["POLY_BUILDER_API_KEY"]
+                print(f"{Colors.GREEN}✓ Master Builder credentials staged.{Colors.RESET}")
+            else:
+                print(f"{Colors.RED}✗ Invalid inputs. Skipping Builder setup.{Colors.RESET}")
+        
+        # Save to .env logic could go here, but for now we just update session env
+        # A full .env writer would be better, but this solves the immediate "ask me" request
+        print(f"{Colors.GREEN}✓ Session credentials updated.{Colors.RESET}\n")
+
     config = Config.from_env()
 
     # --- DEBUG START ---

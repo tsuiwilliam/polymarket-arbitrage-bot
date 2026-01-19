@@ -345,6 +345,11 @@ class Config:
                 )
                 config.use_gasless = True
 
+        # Enforce Signature Type 2 (Proxy) if Gasless is enabled
+        if config.use_gasless and config.clob.signature_type != 2:
+            print("[Config] Gasless enabled -> Forcing Signature Type 2 (Proxy)")
+            config.clob.signature_type = 2
+
         return config
 
     @classmethod
@@ -414,6 +419,10 @@ class Config:
                     api_passphrase=m_pass,
                 )
                 config.use_gasless = True
+
+        # Enforce Signature Type 2 (Proxy) if Gasless is enabled
+        if config.use_gasless and config.clob.signature_type != 2:
+            config.clob.signature_type = 2
 
         return config
 
