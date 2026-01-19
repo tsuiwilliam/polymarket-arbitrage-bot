@@ -160,22 +160,115 @@ def main():
     coins = [c.strip().upper() for c in args.coins.split(",")]
 
     private_key = os.environ.get("POLY_PRIVATE_KEY")
-    # Sanitize key here too just in case
     if private_key:
         private_key = private_key.strip().replace('"', '').replace("'", "")
-        
-    safe_address = os.environ.get("POLY_PROXY_WALLET")
-
-    if not private_key or not safe_address:
-        print(f"{Colors.RED}Error: CREDENTIALS MISSING{Colors.RESET}")
+    
+    if not private_key:
+        print(f"{Colors.RED}Error: POLY_PRIVATE_KEY is missing in .env{Colors.RESET}")
         sys.exit(1)
 
+    # --- RESET ENV WIZARD ---
+    print(f"\n{Colors.CYAN}Current Configuration:{Colors.RESET}")
+    print(f"  Wallet: {private_key[-6:]} (Private Key)")
+    
+    do_reset = input(f"{Colors.BOLD}Do you want to RESET/RECONFIGURE your environment credentials? (y/n): {Colors.RESET}").strip().lower()
+    if do_reset in ('y', 'yes'):
+        print(f"\n{Colors.YELLOW}--- RESETTING CREDENTIALS ---{Colors.RESET}")
+        
+        # 1. Private Key
+        new_pk = input("Enter your Private Key: ").strip().replace('"', '').replace("'", "")
+        if new_pk:
+            private_key = new_pk
+            os.environ["POLY_PRIVATE_KEY"] = new_pk
+        
+        # 2. Master Builder
+        print(f"\n{Colors.BOLD}Do you want to set up Master Builder (Gasless) credentials? (y/n): {Colors.RESET}")
+        do_mb = input().strip().lower()
+        if do_mb in ('y', 'yes'):
+            m_key = input("Builder API Key: ").strip()
+            m_secret = input("Builder API Secret: ").strip()
+            m_pass = input("Builder API Passphrase: ").strip()
+            
+            if m_key and m_secret and m_pass:
+                os.environ["POLY_MASTER_BUILDER_KEY"] = m_key
+                os.environ["POLY_MASTER_BUILDER_SECRET"] = m_secret
+                os.environ["POLY_MASTER_BUILDER_PASSPHRASE"] = m_pass
+                # Reset standard builder keys too just in case
+                if os.environ.get("POLY_BUILDER_API_KEY"):
+                    del os.environ["POLY_BUILDER_API_KEY"]
+                print(f"{Colors.GREEN}✓ Master Builder credentials staged.{Colors.RESET}")
+            else:
+                print(f"{Colors.RED}✗ Invalid inputs. Skipping Builder setup.{Colors.RESET}")
+        
+        # Save to .env logic could go here, but for now we just update session env
+        # A full .env writer would be better, but this solves the immediate "ask me" request
+        print(f"{Colors.GREEN}✓ Session credentials updated.{Colors.RESET}\n")
+
     config = Config.from_env()
+
+    # --- DEBUG START ---
+    debug_msg = f"""
+[DEBUG] Config State:
+- Use Gasless: {config.use_gasless}
+- Signature Type: {config.clob.signature_type}
+- Builder Configured: {config.builder.is_configured()}
+- Safe Address: {config.safe_address}
+- Env Builder Key Present: {bool(os.environ.get('POLY_BUILDER_API_KEY'))}
+- Env Master Key Present: {bool(os.environ.get('POLY_MASTER_BUILDER_KEY'))}
+    """
+    print(debug_msg)
+    with open("config_debug.txt", "w") as f:
+        f.write(debug_msg)
+    # --- DEBUG END ---
+    
+    # Interactive Setup for Gasless Mode
+    if not config.use_gasless:
+        print(f"\n{Colors.YELLOW}Gasless transactions are NOT configured.{Colors.RESET}")
+        print("To enable 'One-Click' automated setup (auto-proxy & gasless trades),")
+        print("you need to provide Master Builder credentials (or your own Builder keys).")
+        
+        choice = input(f"\n{Colors.BOLD}Do you want to set them up now? (y/n): {Colors.RESET}").strip().lower()
+        if choice in ('y', 'yes'):
+            print(f"\n{Colors.CYAN}--- Master Builder Setup ---{Colors.RESET}")
+            print("Enter the credentials. These will be used for this session.")
+            m_key = input("API Key: ").strip()
+            m_secret = input("API Secret: ").strip()
+            m_pass = input("Passphrase: ").strip()
+            
+            if m_key and m_secret and m_pass:
+                os.environ["POLY_MASTER_BUILDER_KEY"] = m_key
+                os.environ["POLY_MASTER_BUILDER_SECRET"] = m_secret
+                os.environ["POLY_MASTER_BUILDER_PASSPHRASE"] = m_pass
+                # Reload config to pick up new env vars
+                config = Config.from_env()
+                print(f"{Colors.GREEN}✓ Credentials set. Gasless mode enabled.{Colors.RESET}\n")
+            else:
+                print(f"{Colors.RED}✗ Invalid credentials provided. Skipping.{Colors.RESET}\n")
+
     bot = TradingBot(config=config, private_key=private_key)
 
     if not bot.is_initialized():
-        print(f"{Colors.RED}Failed to init bot{Colors.RESET}")
+        print(f"{Colors.RED}Failed to initialize bot. Check your private key.{Colors.RESET}")
         sys.exit(1)
+
+    # Sanity check at startup
+    if not asyncio.run(bot.verify_setup()):
+        print(f"{Colors.RED}Startup checks failed. Please check your credentials and balance.{Colors.RESET}")
+        # We don't necessarily want to exit if balance is low, 
+        # but if we can't even get orders, we should exit.
+        auth_working = False
+        try:
+            asyncio.run(bot._run_in_thread(bot.clob_client.get_open_orders))
+            auth_working = True
+        except:
+             pass
+        
+        if not auth_working:
+             print(f"{Colors.RED}Fatal: Could not authenticate with Polymarket. Exiting.{Colors.RESET}")
+             sys.exit(1)
+        
+        print(f"{Colors.YELLOW}Proceeding anyway in 3 seconds...{Colors.RESET}")
+        time.sleep(3)
 
     strategies = []
     for coin in coins:

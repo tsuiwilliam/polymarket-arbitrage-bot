@@ -205,6 +205,31 @@ class GammaClient(ThreadLocalSessionMixin):
                 result[str(outcome).lower()] = cast(values[i])
         return result
 
+    def get_public_profile(self, address: str) -> Optional[Dict[str, Any]]:
+        """
+        Get public profile info for an address.
+        Includes the proxyWallet (Safe) address if it exists.
+
+        Args:
+            address: Wallet address (EOA)
+
+        Returns:
+            Profile data or None
+        """
+        url = f"{self.host}/public-profile"
+        params = {"address": address.lower()}
+        
+        try:
+            response = self.session.get(url, params=params, timeout=self.timeout)
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list) and len(data) > 0:
+                    return data[0]
+                return data
+            return None
+        except Exception:
+            return None
+
     def get_market_info(self, coin: str) -> Optional[Dict[str, Any]]:
         """
         Get comprehensive market info for current 15-minute market.

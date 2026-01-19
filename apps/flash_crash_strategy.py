@@ -150,9 +150,17 @@ class FlashCrashStrategy(BaseStrategy):
         # History info
         up_history = self.prices.get_history_count("up")
         down_history = self.prices.get_history_count("down")
+        
+        # Calculate current max drops in window for visibility
+        up_vol = self.prices.get_volatility("up", self.config.price_lookback_seconds)
+        down_vol = self.prices.get_volatility("down", self.config.price_lookback_seconds)
+        
         lines.append(
             f"History: UP={up_history}/100 DOWN={down_history}/100 | "
-            f"Drop threshold: {self.flash_config.drop_threshold:.2f} in {self.config.price_lookback_seconds}s"
+            f"Drop detected: UP={Colors.GREEN}{up_vol:.3f}{Colors.RESET} DOWN={Colors.RED}{down_vol:.3f}{Colors.RESET}"
+        )
+        lines.append(
+            f"Threshold: {self.flash_config.drop_threshold:.2f} in {self.config.price_lookback_seconds}s"
         )
 
         lines.append(f"{Colors.BOLD}{'='*80}{Colors.RESET}")

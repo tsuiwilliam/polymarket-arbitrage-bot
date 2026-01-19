@@ -97,9 +97,20 @@ class Order:
             self.nonce = int(time.time() * 1_000_000)
 
         # Convert to integers for blockchain
-        self.maker_amount = str(int(self.size * self.price * 10**USDC_DECIMALS))
-        self.taker_amount = str(int(self.size * 10**USDC_DECIMALS))
-        self.side_value = 0 if self.side == "BUY" else 1
+        # BUY: Maker gives USDC (price*size), Maker receives Token (size)
+        # SELL: Maker gives Token (size), Maker receives USDC (price*size)
+        if self.side == "BUY":
+            # Maker gives USDC
+            self.maker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
+            # Maker receives Token
+            self.taker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
+            self.side_value = 0
+        else:
+            # Maker gives Token
+            self.maker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
+            # Maker receives USDC
+            self.taker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
+            self.side_value = 1
 
 
 class SignerError(Exception):
@@ -129,9 +140,10 @@ class OrderSigner:
     }
 
     ORDER_DOMAIN = {
-        "name": "ClobOrderDomain",
+        "name": "Polymarket CLOB Exchange",
         "version": "1",
         "chainId": 137,
+        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
     }
 
     # Order type definition for EIP-712
@@ -259,8 +271,8 @@ class OrderSigner:
             order_message = {
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
-                "signer": self.address,
-                "taker": "0x0000000000000000000000000000000000000000",
+                "signer": to_checksum_address(self.address),
+                "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
                 "takerAmount": int(order.taker_amount),
@@ -283,23 +295,22 @@ class OrderSigner:
             # Return the JSON payload structure required by POST /order
             return {
                 "order": {
-                    "salt": order.salt, # integer
-                    "maker": order.maker, # string address
-                    "signer": self.address, # string address
+                    "salt": order.salt,
+                    "maker": to_checksum_address(order.maker),
+                    "signer": to_checksum_address(self.address),
                     "taker": "0x0000000000000000000000000000000000000000",
-                    "tokenId": str(order.token_id), # string
-                    "makerAmount": str(order.maker_amount), # string
-                    "takerAmount": str(order.taker_amount), # string
-                    "expiration": str(order.expiration), # string
-                    "nonce": str(order.nonce), # string
-                    "feeRateBps": str(order.fee_rate_bps), # string
-                    "side": order.side, # string "BUY" or "SELL"
-                    "signatureType": order.signature_type, # integer
-                    "signature": "0x" + signed.signature.hex(), # string
+                    "tokenId": str(order.token_id),
+                    "makerAmount": str(order.maker_amount),
+                    "takerAmount": str(order.taker_amount),
+                    "expiration": str(order.expiration),
+                    "nonce": str(order.nonce),
+                    "feeRateBps": str(order.fee_rate_bps),
+                    "side": order.side,
+                    "signatureType": int(order.signature_type),
+                    "signature": "0x" + signed.signature.hex(),
                 },
-                "owner": api_key or order.maker, # API KEY STRING (not wallet address!)
-                "orderType": "GTC",
-                "postOnly": False
+                "owner": api_key, # THE API KEY STRING, NOT THE ADDRESS
+                "postOnly": False,
             }
 
         except Exception as e:

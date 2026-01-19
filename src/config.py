@@ -16,6 +16,9 @@ Environment Variables:
     POLY_BUILDER_API_KEY: Builder Program API key
     POLY_BUILDER_API_SECRET: Builder Program API secret
     POLY_BUILDER_API_PASSPHRASE: Builder Program passphrase
+    POLY_MASTER_BUILDER_KEY: (Optional) Master Builder API key
+    POLY_MASTER_BUILDER_SECRET: (Optional) Master Builder API secret
+    POLY_MASTER_BUILDER_PASSPHRASE: (Optional) Master Builder passphrase
     POLY_CLOB_HOST: CLOB API host
     POLY_CHAIN_ID: Chain ID (default: 137)
     POLY_DATA_DIR: Data directory for credentials
@@ -40,6 +43,11 @@ import yaml
 
 # Environment variable prefix
 ENV_PREFIX = "POLY_"
+
+# Common Polymarket Addresses (Polygon)
+CTF_EXCHANGE_ADDRESS = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+CONDITIONAL_TOKENS_ADDRESS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
+USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # Polygon USDC (Bridged)
 
 
 def get_env(name: str, default: str = "") -> str:
@@ -325,6 +333,24 @@ class Config:
         # Auto-detect gasless mode
         config.use_gasless = config.builder.is_configured()
 
+        # Check for Master Builder credentials if primary ones are missing
+        if not config.use_gasless:
+            m_key = get_env("MASTER_BUILDER_KEY")
+            m_secret = get_env("MASTER_BUILDER_SECRET")
+            m_pass = get_env("MASTER_BUILDER_PASSPHRASE")
+            if m_key and m_secret and m_pass:
+                config.builder = BuilderConfig(
+                    api_key=m_key,
+                    api_secret=m_secret,
+                    api_passphrase=m_pass,
+                )
+                config.use_gasless = True
+
+        # Enforce Signature Type 2 (Proxy) if Gasless is enabled
+        if config.use_gasless and config.clob.signature_type != 2:
+            print("[Config] Gasless enabled -> Forcing Signature Type 2 (Proxy)")
+            config.clob.signature_type = 2
+
         return config
 
     @classmethod
@@ -382,6 +408,23 @@ class Config:
         # Re-check gasless mode
         config.use_gasless = config.builder.is_configured()
 
+        # Check for Master Builder credentials if primary ones are missing
+        if not config.use_gasless:
+            m_key = get_env("MASTER_BUILDER_KEY")
+            m_secret = get_env("MASTER_BUILDER_SECRET")
+            m_pass = get_env("MASTER_BUILDER_PASSPHRASE")
+            if m_key and m_secret and m_pass:
+                config.builder = BuilderConfig(
+                    api_key=m_key,
+                    api_secret=m_secret,
+                    api_passphrase=m_pass,
+                )
+                config.use_gasless = True
+
+        # Enforce Signature Type 2 (Proxy) if Gasless is enabled
+        if config.use_gasless and config.clob.signature_type != 2:
+            config.clob.signature_type = 2
+
         return config
 
     def save(self, filepath: str = "config.yaml") -> None:
@@ -416,9 +459,6 @@ class Config:
             List of validation errors (empty if valid)
         """
         errors = []
-
-        if not self.safe_address:
-            errors.append("safe_address is required")
 
         if not self.rpc_url:
             errors.append("rpc_url is required")

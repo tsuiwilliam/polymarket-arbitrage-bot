@@ -65,6 +65,7 @@ from .config import Config, BuilderConfig
 from .signer import OrderSigner, Order
 from .client import ClobClient, RelayerClient, ApiCredentials
 from .crypto import KeyManager, CryptoError, InvalidPasswordError
+from .gamma_client import GammaClient
 
 
 # Configure logging
@@ -225,10 +226,16 @@ class TradingBot:
         # Initialize API clients
         self._init_clients()
 
-        # Auto-derive API credentials if we have a signer but no API creds
-        if self.signer and not self._api_creds:
+        # Auto-derive API credentials ONLY for EOA mode (signature_type=0)
+        # Proxy wallets (signature_type=2) use Builder credentials exclusively
+        if self.signer and not self._api_creds and self.config.clob.signature_type == 0:
             self._derive_api_creds()
+        elif self.config.clob.signature_type == 2:
+            logger.info("Proxy mode: Using Builder credentials for authentication (skipping L2 API key)")
 
+        # Components for auto-discovery
+        self.gamma_client = GammaClient(host=self.config.clob.host.replace("clob", "gamma-api"))
+        
         logger.info(f"TradingBot initialized (gasless: {self.config.use_gasless})")
 
     def _load_encrypted_key(self, filepath: str, password: str) -> None:
@@ -298,6 +305,97 @@ class TradingBot:
             )
             logger.info("Relayer client initialized (gasless enabled)")
 
+    async def auto_discover_proxy(self) -> Optional[str]:
+        """
+        Attempt to automatically discover the user's proxy (Safe) address.
+        Checks the Gamma API public-profile first.
+        """
+        if not self.signer:
+            return None
+        
+        eoa = self.signer.address
+        logger.info(f"Attempting to auto-discover proxy for {eoa}...")
+        
+        try:
+            profile = await self._run_in_thread(self.gamma_client.get_public_profile, eoa)
+            if profile and profile.get("proxyWallet"):
+                proxy = profile["proxyWallet"]
+                logger.info(f"✓ Found proxy wallet: {proxy}")
+                return proxy
+            
+            logger.info("! No proxy wallet found in public profile.")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to auto-discover proxy: {e}")
+            return None
+
+    async def verify_setup(self) -> bool:
+        """
+        Verify that the bot is properly configured and has access to APIs.
+        Returns True if setup is valid.
+        """
+        logger.info("--- Performing Startup Sanity Checks ---")
+        success = True
+
+        # 1. Check Signer/Funder
+        if not self.signer:
+            logger.error("✗ No private key loaded. Signer unavailable.")
+            success = False
+        else:
+            logger.info(f"✓ Signer loaded: {self.signer.address}")
+
+        # 2. Check User API Credentials (only for EOA mode)
+        # Proxy mode uses Builder credentials exclusively
+        if self.config.clob.signature_type == 0:
+            try:
+                # get_open_orders is a reliable health check for L2 auth
+                await self._run_in_thread(self.clob_client.get_open_orders)
+                logger.info("✓ User API Key valid.")
+            except Exception as e:
+                logger.error(f"✗ User API credentials invalid or expired: {e}")
+                success = False
+        else:
+            logger.info("✓ Proxy mode: Skipping L2 API check (using Builder auth)")
+
+        # 3. Check Builder API (if gasless)
+        if self.config.use_gasless:
+            if not self.config.builder or not self.config.builder.is_configured():
+                logger.error("✗ Gasless enabled but Builder API keys are missing (Master Builder fallback failed)")
+                success = False
+            else:
+                logger.info("✓ Builder API keys configured (using Admin or User keys)")
+            
+            if not self.config.safe_address:
+                logger.info("! POLY_PROXY_WALLET missing. Attempting auto-discovery...")
+                proxy = await self.auto_discover_proxy()
+                if proxy:
+                    self.config.safe_address = proxy
+                    self._init_clients()
+                    logger.info(f"✓ Proxy Wallet discovered: {proxy}")
+                else:
+                    logger.error("✗ Gasless enabled but proxy wallet could not be discovered.")
+                    success = False
+            
+            if self.config.safe_address:
+                logger.info("✓ Proxy Wallet configured. Checking deployment...")
+                # Try to deploy/ensure deployment
+                await self.deploy_safe_if_needed()
+                # Ensure USDC approval for CTF exchange
+                await self.approve_usdc_gasless()
+                logger.info("✓ Proxy setup (deployment/approval) initiated.")
+
+        # 4. Check Balance
+        try:
+            balance = await self.get_collateral_balance()
+            logger.info(f"✓ USDC Balance: ${balance:.2f}")
+            if balance < 1.0:
+                logger.warning("! Low balance (under $1.00). Trades might fail.")
+        except Exception as e:
+            logger.warning(f"! Could not fetch balance (check your network/RPC): {e}")
+
+        logger.info("--- Sanity Checks Complete ---")
+        return success
+
     async def _run_in_thread(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Run a blocking call in a worker thread to avoid event loop stalls."""
         return await asyncio.to_thread(func, *args, **kwargs)
@@ -361,7 +459,7 @@ class TradingBot:
                 maker=maker_address,
                 expiration=expiration,
                 salt=salt,
-                nonce=0, # Defaults to 0 in official SDK
+                nonce=None, # Allow Order class to generate timestamp nonce
                 fee_rate_bps=fee_rate_bps,
                 signature_type=self.config.clob.signature_type,
             )
@@ -626,6 +724,45 @@ class TradingBot:
         except Exception as e:
             logger.warning(f"Safe deployment failed (may already be deployed): {e}")
             return False
+
+    async def approve_usdc_gasless(self, amount: int = 10**12) -> bool:
+        """
+        Approve USDC spending via Builder Relayer.
+        
+        Args:
+            amount: Amount in base units (6 decimals). Default: $1M
+        """
+        if not self.config.use_gasless or not self.relayer_client:
+            return False
+            
+        from src.config import CTF_EXCHANGE_ADDRESS
+        try:
+            response = await self._run_in_thread(
+                self.relayer_client.approve_usdc,
+                self.config.safe_address,
+                CTF_EXCHANGE_ADDRESS,
+                amount
+            )
+            logger.info(f"USDC approval initiated: {response}")
+            return True
+        except Exception as e:
+            logger.error(f"USDC approval failed: {e}")
+            return False
+
+    async def setup_gasless(self) -> Dict[str, bool]:
+        """
+        Perform complete gasless deployment and approval setup.
+        
+        Returns:
+            Dictionary with setup results
+        """
+        results = {"deployed": False, "approved": False}
+        if not self.config.use_gasless:
+            return results
+            
+        results["deployed"] = await self.deploy_safe_if_needed()
+        results["approved"] = await self.approve_usdc_gasless()
+        return results
     async def get_collateral_balance(self) -> float:
         """Get USDC balance."""
         if not self.clob_client:

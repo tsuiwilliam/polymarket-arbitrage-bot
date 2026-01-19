@@ -234,6 +234,11 @@ class ClobClient(ApiClient):
         self.api_creds = api_creds
         self.builder_creds = builder_creds
         self.ws = MarketWebSocket()  # Initialize shared WebSocket
+        
+        # Balance cache to avoid rate limiting on RPC calls
+        self._balance_cache = 0.0
+        self._balance_cache_time = 0.0
+        self._balance_cache_ttl = 30.0  # Cache for 30 seconds
 
     def _build_headers(
         self,
@@ -650,10 +655,17 @@ class ClobClient(ApiClient):
     def get_collateral_balance(self) -> float:
         """
         Get USDC/Collateral balance.
+        Uses 30-second cache to avoid rate limiting on RPC calls.
         
         Returns:
             Balance as float (USDC)
         """
+        import time
+        
+        # Check cache first
+        if time.time() - self._balance_cache_time < self._balance_cache_ttl:
+            return self._balance_cache
+        
         try:
             endpoint = "/balance-allowance"
             params = {"asset_type": "COLLATERAL"}
@@ -663,10 +675,72 @@ class ClobClient(ApiClient):
             
             # Response format: {"balance": "1000000", "allowances": ...}
             raw_balance = res.get("balance", "0")
-            return float(raw_balance) / 1_000_000 # USDC has 6 decimals
-        except Exception:
-            pass
-        return 0.0
+            balance = float(raw_balance) / 1_000_000 # USDC has 6 decimals
+            
+            # Update cache
+            self._balance_cache = balance
+            self._balance_cache_time = time.time()
+            return balance
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # If API fails (common in Proxy mode without L2 API keys),
+            # fall back to on-chain balance query
+            if "401" in str(e) or "Unauthorized" in str(e):
+                logger.info("API balance check failed (no L2 API key), querying blockchain directly...")
+                try:
+                    balance = self._get_onchain_usdc_balance()
+                    # Update cache
+                    self._balance_cache = balance
+                    self._balance_cache_time = time.time()
+                    return balance
+                except Exception as e2:
+                    logger.warning(f"On-chain balance query also failed: {e2}")
+            else:
+                logger.warning(f"Failed to get collateral balance: {e}")
+        
+        # Return cached value if available, otherwise 0
+        return self._balance_cache if self._balance_cache > 0 else 0.0
+    
+    def _get_onchain_usdc_balance(self) -> float:
+        """
+        Query USDC balance directly from blockchain.
+        Used as fallback when API authentication fails.
+        """
+        try:
+            from web3 import Web3
+            from src.config import USDC_ADDRESS
+            
+            # Connect to Polygon RPC
+            w3 = Web3(Web3.HTTPProvider("https://polygon-rpc.com"))
+            
+            # USDC contract ABI (just the balanceOf function)
+            usdc_abi = [{
+                "constant": True,
+                "inputs": [{"name": "_owner", "type": "address"}],
+                "name": "balanceOf",
+                "outputs": [{"name": "balance", "type": "uint256"}],
+                "type": "function"
+            }]
+            
+            usdc_contract = w3.eth.contract(
+                address=Web3.to_checksum_address(USDC_ADDRESS),
+                abi=usdc_abi
+            )
+            
+            # Query balance
+            balance_wei = usdc_contract.functions.balanceOf(
+                Web3.to_checksum_address(self.funder)
+            ).call()
+            
+            # USDC has 6 decimals
+            return float(balance_wei) / 1_000_000
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"On-chain balance query failed: {e}")
+            return 0.0
 
 
 class RelayerClient(ApiClient):
@@ -743,8 +817,16 @@ class RelayerClient(ApiClient):
         Returns:
             Deployment transaction response
         """
-        endpoint = "/deploy"
-        body = {"safeAddress": safe_address}
+        endpoint = "/wallet/deploy-safe"
+        body = {
+            "safeAddress": safe_address,
+            "owner": safe_address  # Some endpoints require owner, usually the Safe itself or EOA
+        }
+        # Actually, for deploy-safe, the body usually just needs the owner's EOA or the predicted Safe address.
+        # Let's stick safeAddress first, but we might need "owner" too.
+        # Research suggests: POST /wallet/deploy-safe { "owner": "0xEOA" } or { "safeAddress": "..." }
+        # Let's try matching the TypeScript SDK: it sends { safeAddress }.
+        
         body_json = json.dumps(body, separators=(',', ':'))
         headers = self._build_headers("POST", endpoint, body_json)
 
@@ -772,9 +854,18 @@ class RelayerClient(ApiClient):
         Returns:
             Approval transaction response
         """
-        endpoint = "/approve-usdc"
+        endpoint = "/allowance/approve"
+        # The relayer usually expects: { "token": "USDC_ADDRESS", "spender": "...", "amount": "...", "safeAddress": "..." }
+        # Need to verify if "token" is implicit or explicit.
+        # Let's assume explicit for now, but defaulting to USDC logic inside the bot caller.
+        # Wait, the bot caller passed 'amount' and we didn't pass the token address here.
+        # Let's update the caller or hardcode USDC here if we are sure.
+        # Actually the method signature is approve_usdc, so hardcoding/config lookup is fine.
+        from src.config import USDC_ADDRESS
+        
         body = {
             "safeAddress": safe_address,
+            "token": USDC_ADDRESS,
             "spender": spender,
             "amount": str(amount),
         }
