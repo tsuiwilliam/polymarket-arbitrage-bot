@@ -412,8 +412,8 @@ class TradingBot:
                     )
                     
                     # Sign the order
-                    # Owner must be the address that owns the L2 API key (always EOA)
-                    api_key = self.signer.address
+                    # Owner must be the L2 API key STRING, not an address
+                    api_key = self.clob_client.api_creds.api_key
                     signed = self.signer.sign_order(test_order, api_key=api_key)
                     
                     # Build headers
@@ -544,10 +544,9 @@ class TradingBot:
             )
 
             # Sign order with appropriate owner
-            # The "owner" must be the address that owns the L2 API key
-            # L2 API keys are always derived for the EOA, so owner = EOA address
-            # The maker (funder) can be different (Proxy in gasless mode)
-            api_key = self.signer.address if self.clob_client.api_creds else None
+            # The "owner" field must be the L2 API key STRING (not an address)
+            # Example: "faa27da2-xxxx-xxxx-xxxx", not "0x186DaFe3..."
+            api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
             
             signed = signer.sign_order(order, api_key=api_key)
 
