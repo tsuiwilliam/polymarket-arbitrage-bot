@@ -414,6 +414,14 @@ class TradingBot:
                         import random
                         import json
                         
+                        # Fetch the actual fee rate for this market
+                        try:
+                            test_fee_rate = self.clob_client.get_fee_rate(test_token_id)
+                            logger.info(f"Test order using market fee rate: {test_fee_rate} bps")
+                        except Exception as e:
+                            logger.warning(f"Could not fetch fee rate, using default 1000: {e}")
+                            test_fee_rate = 1000
+                        
                         test_order = Order(
                             token_id=test_token_id,
                             price=0.01,   # Low price to avoid matching
@@ -423,7 +431,7 @@ class TradingBot:
                             expiration=0,
                             salt=random.randint(1, 10**12),
                             nonce=None,
-                            fee_rate_bps=1000,  # 10% maker fee (1000 basis points)
+                            fee_rate_bps=test_fee_rate,
                             signature_type=self.config.clob.signature_type,
                         )
                         
