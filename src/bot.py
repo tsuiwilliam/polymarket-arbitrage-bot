@@ -281,7 +281,15 @@ class TradingBot:
         # If using EOA (type 0), funder should be the EOA address (signer)
         # If using SAFE (type 1/2), funder should be the Safe address
         funder_address = self.config.safe_address
-        if self.config.clob.signature_type == 0 and self.signer:
+        
+        # If safe_address is empty but we're using gasless/proxy mode, derive it
+        if not funder_address and self.config.use_gasless and self.signer:
+            from src.utils import get_proxy_address
+            funder_address = get_proxy_address(self.signer.address)
+            logger.info(f"Derived Safe address from EOA: {funder_address}")
+            # Update config for consistency
+            self.config.safe_address = funder_address
+        elif self.config.clob.signature_type == 0 and self.signer:
             funder_address = self.signer.address
             logger.info(f"Using EOA address {funder_address} as funder (Signature Type 0)")
         
