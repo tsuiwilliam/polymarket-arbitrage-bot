@@ -412,7 +412,8 @@ class TradingBot:
                     )
                     
                     # Sign the order
-                    api_key = self.config.safe_address if self.config.clob.signature_type == 2 else self.clob_client.api_creds.api_key
+                    # Owner must be the address that owns the L2 API key (always EOA)
+                    api_key = self.signer.address
                     signed = self.signer.sign_order(test_order, api_key=api_key)
                     
                     # Build headers
@@ -543,14 +544,10 @@ class TradingBot:
             )
 
             # Sign order with appropriate owner
-            # In Proxy mode (signature_type=2), owner is the Proxy address
-            # In EOA mode (signature_type=0), owner is the API key
-            if self.config.clob.signature_type == 2:
-                # Proxy mode: owner is the Proxy wallet address
-                api_key = self.config.safe_address
-            else:
-                # EOA mode: owner is the API key
-                api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
+            # The "owner" must be the address that owns the L2 API key
+            # L2 API keys are always derived for the EOA, so owner = EOA address
+            # The maker (funder) can be different (Proxy in gasless mode)
+            api_key = self.signer.address if self.clob_client.api_creds else None
             
             signed = signer.sign_order(order, api_key=api_key)
 
