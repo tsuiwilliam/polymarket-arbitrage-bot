@@ -390,84 +390,87 @@ class TradingBot:
                 
                 # 3b. Test order placement (validate auth works end-to-end)
                 logger.info("Testing order placement authentication with live API call...")
+                
+                # Fetch a real active market to use for testing
+                logger.info("Fetching active market for test order...")
+                test_token_id = None
                 try:
-                    # Fetch a real active market to use for testing
-                    logger.info("Fetching active market for test order...")
-                    try:
-                        markets_response = await self._run_in_thread(
-                            self.clob_client._request,
-                            "GET",
-                            "/markets"
-                        )
-                        if markets_response and len(markets_response) > 0:
-                            # Use first available market
-                            test_token_id = markets_response[0]['tokens'][0]['token_id']
-                            logger.info(f"Using market token: {test_token_id[:20]}...")
-                        else:
-                            raise Exception("No active markets found")
-                    except Exception as e:
-                        logger.warning(f"Could not fetch active market: {e}")
-                        logger.info("Skipping test order validation (no active markets available)")
-                        # Continue without test order - auth was already validated
-                        raise Exception("Skip test order")
-                    
-                    from src.signer import Order
-                    import random
-                    import json
-                    
-                    test_order = Order(
-                        token_id=test_token_id,
-                        price=0.001,  # Extremely low price - will never match
-                        size=0.01,    # Minimal size (1 cent)
-                        side="BUY",
-                        maker=self.config.safe_address,
-                        expiration=0,
-                        salt=random.randint(1, 10**12),
-                        nonce=None,
-                        fee_rate_bps=0,
-                        signature_type=self.config.clob.signature_type,
+                    markets_response = await self._run_in_thread(
+                        self.clob_client._request,
+                        "GET",
+                        "/markets"
                     )
-                    
-                    # Sign the order
-                    # Owner must be the L2 API key STRING, not an address
-                    api_key = self.clob_client.api_creds.api_key
-                    signed = self.signer.sign_order(test_order, api_key=api_key)
-                    
-                    # Build headers
-                    body_json = json.dumps(signed, separators=(',', ':'))
-                    headers = self.clob_client._build_headers("POST", "/order", body_json)
-                    
-                    # Log headers for debugging
-                    logger.info(f"Test order headers: {list(headers.keys())}")
-                    if "POLY_BUILDER_API_KEY" in headers:
-                        logger.info("  ✓ Builder credentials included")
-                    if "POLY_API_KEY" in headers:
-                        logger.info(f"  ✓ User L2 credentials included (POLY_ADDRESS: {headers.get('POLY_ADDRESS', 'N/A')})")
-                    
-                    # Actually POST the test order to the server
-                    logger.info("Submitting test order to Polymarket API...")
+                    if markets_response and len(markets_response) > 0:
+                        # Use first available market
+                        test_token_id = markets_response[0]['tokens'][0]['token_id']
+                        logger.info(f"Using market token: {test_token_id[:20]}...")
+                    else:
+                        logger.warning("No active markets found")
+                except Exception as e:
+                    logger.warning(f"Could not fetch active market: {e}")
+                
+                if not test_token_id:
+                    logger.info("⚠ Skipping test order validation (no active markets available)")
+                    logger.info("  Authentication was validated via L2 API check")
+                else:
                     try:
-                        response = await self._run_in_thread(
-                            self.clob_client.post_order,
-                            signed,
-                            "GTC"
+                        from src.signer import Order
+                        import random
+                        import json
+                        
+                        test_order = Order(
+                            token_id=test_token_id,
+                            price=0.001,  # Extremely low price - will never match
+                            size=0.01,    # Minimal size (1 cent)
+                            side="BUY",
+                            maker=self.config.safe_address,
+                            expiration=0,
+                            salt=random.randint(1, 10**12),
+                            nonce=None,
+                            fee_rate_bps=0,
+                            signature_type=self.config.clob.signature_type,
                         )
-                        logger.info(f"✓ Test order ACCEPTED! Order ID: {response.get('orderID', 'N/A')}")
-                        logger.info("  Authentication is working correctly!")
-                        # Cancel the test order immediately
+                        
+                        # Sign the order
+                        # Owner must be the L2 API key STRING, not an address
+                        api_key = self.clob_client.api_creds.api_key
+                        signed = self.signer.sign_order(test_order, api_key=api_key)
+                        
+                        # Build headers
+                        body_json = json.dumps(signed, separators=(',', ':'))
+                        headers = self.clob_client._build_headers("POST", "/order", body_json)
+                        
+                        # Log headers for debugging
+                        logger.info(f"Test order headers: {list(headers.keys())}")
+                        if "POLY_BUILDER_API_KEY" in headers:
+                            logger.info("  ✓ Builder credentials included")
+                        if "POLY_API_KEY" in headers:
+                            logger.info(f"  ✓ User L2 credentials included (POLY_ADDRESS: {headers.get('POLY_ADDRESS', 'N/A')})")
+                        
+                        # Actually POST the test order to the server
+                        logger.info("Submitting test order to Polymarket API...")
                         try:
-                            await self._run_in_thread(
-                                self.clob_client.cancel_order,
-                                response.get('orderID')
+                            response = await self._run_in_thread(
+                                self.clob_client.post_order,
+                                signed,
+                                "GTC"
                             )
-                            logger.info("  Test order cancelled successfully")
-                        except:
-                            pass  # Ignore cancel errors
-                    except Exception as post_error:
-                        error_msg = str(post_error)
-                        logger.error(f"✗ Test order REJECTED: {error_msg}")
-                        if "401" in error_msg or "Unauthorized" in error_msg:
-                            logger.error("  → Authentication failure - credentials are invalid or mismatched")
+                            logger.info(f"✓ Test order ACCEPTED! Order ID: {response.get('orderID', 'N/A')}")
+                            logger.info("  Authentication is working correctly!")
+                            # Cancel the test order immediately
+                            try:
+                                await self._run_in_thread(
+                                    self.clob_client.cancel_order,
+                                    response.get('orderID')
+                                )
+                                logger.info("  Test order cancelled successfully")
+                            except:
+                                pass  # Ignore cancel errors
+                        except Exception as post_error:
+                            error_msg = str(post_error)
+                            logger.error(f"✗ Test order REJECTED: {error_msg}")
+                            if "401" in error_msg or "Unauthorized" in error_msg:
+                                logger.error("  → Authentication failure - credentials are invalid or mismatched")
                             logger.error(f"  → Check that POLY_ADDRESS matches the address used to derive API key")
                             success = False
                         elif "400" in error_msg:
