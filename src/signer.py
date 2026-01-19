@@ -261,7 +261,7 @@ class OrderSigner:
             message_data=message_data
         )
 
-        signed = self.wallet.sign_message(signable)
+        signed = self.account.sign_message(signable)
         return "0x" + signed.signature.hex()
 
     def sign_order(self, order: Order, api_key: str = None, order_type: str = "GTC") -> Dict[str, Any]:
@@ -304,7 +304,7 @@ class OrderSigner:
                 message_data=order_message
             )
 
-            signed = self.wallet.sign_message(signable)
+            signed = self.account.sign_message(signable)
 
             # Return the JSON payload structure required by POST /order
             # Note: The 'order' object fields MUST be camelCase.
@@ -382,7 +382,7 @@ class OrderSigner:
         from eth_account.messages import encode_defunct
 
         signable = encode_defunct(text=message)
-        signed = self.wallet.sign_message(signable)
+        signed = self.account.sign_message(signable)
         return "0x" + signed.signature.hex()
 
 
