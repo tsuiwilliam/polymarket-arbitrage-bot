@@ -551,8 +551,10 @@ class TradingBot:
             signed = signer.sign_order(order, api_key=api_key)
 
             # Log physical payload for debugging auth issues
-            logger.debug(f"Order owner field (API Key): {signed.get('owner')}")
-            logger.debug(f"Order maker field: {signed.get('order', {}).get('maker')}")
+            logger.info(f"[ORDER] Owner (API key): {signed.get('owner', 'N/A')[:16]}...")
+            logger.info(f"[ORDER] Maker: {signed.get('order', {}).get('maker', 'N/A')}")
+            logger.info(f"[ORDER] Signer: {signed.get('order', {}).get('signer', 'N/A')}")
+            logger.info(f"[ORDER] Signature Type: {signed.get('order', {}).get('signatureType', 'N/A')}")
 
             # Submit to CLOB
             try:
