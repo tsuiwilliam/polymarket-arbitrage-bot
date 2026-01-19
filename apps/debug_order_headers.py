@@ -30,6 +30,16 @@ def main():
     print(f"Proxy Address: {config.safe_address}")
     print(f"EOA Address: {signer.address}")
     print(f"Builder Configured: {config.builder.is_configured()}")
+    
+    # Debug: Check what the config actually loaded
+    print()
+    print("Config Loading Debug:")
+    print(f"  ENV POLY_BUILDER_API_KEY: {os.environ.get('POLY_BUILDER_API_KEY', 'NOT SET')[:20] if os.environ.get('POLY_BUILDER_API_KEY') else 'NOT SET'}...")
+    print(f"  ENV POLY_BUILDER_API_SECRET: {os.environ.get('POLY_BUILDER_API_SECRET', 'NOT SET')[:20] if os.environ.get('POLY_BUILDER_API_SECRET') else 'NOT SET'}...")
+    print(f"  ENV POLY_BUILDER_API_PASSPHRASE: {os.environ.get('POLY_BUILDER_API_PASSPHRASE', 'NOT SET')[:20] if os.environ.get('POLY_BUILDER_API_PASSPHRASE') else 'NOT SET'}...")
+    print(f"  Config builder.api_key: {config.builder.api_key[:20] if config.builder.api_key else 'EMPTY'}...")
+    print(f"  Config builder.api_secret: {config.builder.api_secret[:20] if config.builder.api_secret else 'EMPTY'}...")
+    print(f"  Config builder.api_passphrase: {config.builder.api_passphrase[:20] if config.builder.api_passphrase else 'EMPTY'}...")
     print()
     
     # Create CLOB client
