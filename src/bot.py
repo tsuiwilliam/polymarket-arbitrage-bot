@@ -226,12 +226,11 @@ class TradingBot:
         # Initialize API clients
         self._init_clients()
 
-        # Auto-derive API credentials ONLY for EOA mode (signature_type=0)
-        # Proxy wallets (signature_type=2) use Builder credentials exclusively
-        if self.signer and not self._api_creds and self.config.clob.signature_type == 0:
+        # Auto-derive API credentials for all modes
+        # Builder credentials are for ATTRIBUTION, L2 API credentials are for AUTHENTICATION
+        # Proxy mode needs BOTH!
+        if self.signer and not self._api_creds:
             self._derive_api_creds()
-        elif self.config.clob.signature_type == 2:
-            logger.info("Proxy mode: Using Builder credentials for authentication (skipping L2 API key)")
 
         # Components for auto-discovery
         self.gamma_client = GammaClient(host=self.config.clob.host.replace("clob", "gamma-api"))
@@ -344,18 +343,16 @@ class TradingBot:
         else:
             logger.info(f"✓ Signer loaded: {self.signer.address}")
 
-        # 2. Check User API Credentials (only for EOA mode)
-        # Proxy mode uses Builder credentials exclusively
-        if self.config.clob.signature_type == 0:
-            try:
-                # get_open_orders is a reliable health check for L2 auth
-                await self._run_in_thread(self.clob_client.get_open_orders)
-                logger.info("✓ User API Key valid.")
-            except Exception as e:
-                logger.error(f"✗ User API credentials invalid or expired: {e}")
-                success = False
-        else:
-            logger.info("✓ Proxy mode: Skipping L2 API check (using Builder auth)")
+        # 2. Check User API Credentials
+        # Both EOA and Proxy modes need L2 API credentials for authentication
+        # Builder credentials are for attribution only
+        try:
+            # get_open_orders is a reliable health check for L2 auth
+            await self._run_in_thread(self.clob_client.get_open_orders)
+            logger.info("✓ User API Key valid.")
+        except Exception as e:
+            logger.error(f"✗ User API credentials invalid or expired: {e}")
+            success = False
 
         # 3. Check Builder API (if gasless)
         if self.config.use_gasless:
