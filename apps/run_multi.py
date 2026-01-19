@@ -170,13 +170,18 @@ def main():
     config = Config.from_env()
 
     # --- DEBUG START ---
-    print(f"\n[DEBUG] Config State:")
-    print(f"  - Use Gasless: {config.use_gasless}")
-    print(f"  - Signature Type: {config.clob.signature_type}")
-    print(f"  - Builder Configured: {config.builder.is_configured()}")
-    print(f"  - Safe Address: {config.safe_address}")
-    print(f"  - Env Builder Key Present: {bool(os.environ.get('POLY_BUILDER_API_KEY'))}")
-    print(f"  - Env Master Key Present: {bool(os.environ.get('POLY_MASTER_BUILDER_KEY'))}")
+    debug_msg = f"""
+[DEBUG] Config State:
+- Use Gasless: {config.use_gasless}
+- Signature Type: {config.clob.signature_type}
+- Builder Configured: {config.builder.is_configured()}
+- Safe Address: {config.safe_address}
+- Env Builder Key Present: {bool(os.environ.get('POLY_BUILDER_API_KEY'))}
+- Env Master Key Present: {bool(os.environ.get('POLY_MASTER_BUILDER_KEY'))}
+    """
+    print(debug_msg)
+    with open("config_debug.txt", "w") as f:
+        f.write(debug_msg)
     # --- DEBUG END ---
     
     # Interactive Setup for Gasless Mode
