@@ -454,13 +454,19 @@ class ClobClient(ApiClient):
         Returns:
             Fee rate in basis points (e.g., 1000 = 10%, 0 = fee-free)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         endpoint = f"/fee-rate?token_id={token_id}"
         try:
             response = self._request("GET", endpoint)
-            return int(response.get("fee_rate_bps", 0))
-        except Exception:
-            # Default to 0 if endpoint fails
-            return 0
+            fee_rate = int(response.get("fee_rate_bps", 0))
+            logger.info(f"Fee rate API response for {token_id[:8]}...: {response}")
+            return fee_rate
+        except Exception as e:
+            logger.warning(f"Fee rate query failed for {token_id[:8]}...: {e}")
+            # Default to 1000 (10%) if endpoint fails - safer than 0
+            return 1000
 
     def get_open_orders(self) -> List[Dict[str, Any]]:
         """
