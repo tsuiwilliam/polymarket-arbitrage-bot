@@ -99,33 +99,38 @@ class Order:
         # Convert to integers for blockchain
         # BUY: Maker gives USDC (price*size), Maker receives Token (size)
         # SELL: Maker gives Token (size), Maker receives USDC (price*size)
-        # IMPORTANT: Polymarket uses floor/truncation (NOT rounding) for decimal precision:
-        #   - BUY orders: maker amount (USDC) max 4 decimals, taker amount (tokens) max 2 decimals
-        #   - SELL orders: maker amount (tokens) max 2 decimals, taker amount (USDC) max 4 decimals
+        # IMPORTANT: Polymarket validation requires:
+        #   1. Floor token amount to 2 decimals FIRST
+        #   2. Calculate USDC from floored token amount
+        #   3. Floor USDC to 4 decimals
         
         import math
         
         if self.side == "BUY":
-            # Maker gives USDC - floor to 4 decimals then convert to raw amount
-            usdc_raw = self.size * self.price * 10**USDC_DECIMALS
-            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100  # Floor to 4 decimal places
+            # Step 1: Floor token size to 2 decimals
+            token_raw = self.size * 10**USDC_DECIMALS
+            token_floor_2dp = math.floor(token_raw / 10000) * 10000
+            self.taker_amount = str(int(token_floor_2dp))
+            
+            # Step 2: Calculate USDC from FLOORED token amount
+            floored_token_size = token_floor_2dp / 10**USDC_DECIMALS
+            usdc_raw = floored_token_size * self.price * 10**USDC_DECIMALS
+            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100
             self.maker_amount = str(int(usdc_floor_4dp))
             
-            # Maker receives Token - floor to 2 decimals then convert to raw amount
-            token_raw = self.size * 10**USDC_DECIMALS
-            token_floor_2dp = math.floor(token_raw / 10000) * 10000  # Floor to 2 decimal places
-            self.taker_amount = str(int(token_floor_2dp))
             self.side_value = 0
         else:
-            # Maker gives Token - floor to 2 decimals then convert to raw amount
+            # Step 1: Floor token size to 2 decimals
             token_raw = self.size * 10**USDC_DECIMALS
-            token_floor_2dp = math.floor(token_raw / 10000) * 10000  # Floor to 2 decimal places
+            token_floor_2dp = math.floor(token_raw / 10000) * 10000
             self.maker_amount = str(int(token_floor_2dp))
             
-            # Maker receives USDC - floor to 4 decimals then convert to raw amount
-            usdc_raw = self.size * self.price * 10**USDC_DECIMALS
-            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100  # Floor to 4 decimal places
+            # Step 2: Calculate USDC from FLOORED token amount
+            floored_token_size = token_floor_2dp / 10**USDC_DECIMALS
+            usdc_raw = floored_token_size * self.price * 10**USDC_DECIMALS
+            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100
             self.taker_amount = str(int(usdc_floor_4dp))
+            
             self.side_value = 1
 
 
