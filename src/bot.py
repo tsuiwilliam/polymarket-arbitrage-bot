@@ -420,7 +420,7 @@ class TradingBot:
                         
                         test_order = Order(
                             token_id=test_token_id,
-                            price=0.001,  # Extremely low price - will never match
+                            price=0.01,   # Low but realistic price - won't match typical market prices
                             size=0.01,    # Minimal size (1 cent)
                             side="BUY",
                             maker=self.config.safe_address,
