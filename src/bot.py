@@ -391,8 +391,25 @@ class TradingBot:
                 # 3b. Test order placement (validate auth works end-to-end)
                 logger.info("Testing order placement authentication with live API call...")
                 try:
-                    # Create a test order with impossible price to avoid execution
-                    test_token_id = "99914208981568816645551301561974062576963636618104166856807686031985202521238"  # BTC UP
+                    # Fetch a real active market to use for testing
+                    logger.info("Fetching active market for test order...")
+                    try:
+                        markets_response = await self._run_in_thread(
+                            self.clob_client._request,
+                            "GET",
+                            "/markets"
+                        )
+                        if markets_response and len(markets_response) > 0:
+                            # Use first available market
+                            test_token_id = markets_response[0]['tokens'][0]['token_id']
+                            logger.info(f"Using market token: {test_token_id[:20]}...")
+                        else:
+                            raise Exception("No active markets found")
+                    except Exception as e:
+                        logger.warning(f"Could not fetch active market: {e}")
+                        logger.info("Skipping test order validation (no active markets available)")
+                        # Continue without test order - auth was already validated
+                        raise Exception("Skip test order")
                     
                     from src.signer import Order
                     import random
