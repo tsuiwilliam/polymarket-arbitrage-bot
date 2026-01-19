@@ -391,10 +391,14 @@ class TradingBot:
                 # 3b. Test order placement (validate auth works end-to-end)
                 logger.info("Testing order placement authentication with live API call...")
                 
-                # Use a known active BTC market token for testing
-                # This is a real market that the bot will trade, ensuring realistic validation
-                test_token_id = "21742633143463906290569050155826241533067272736897614950488156847949938836455"  # BTC
-                logger.info(f"Using BTC market token for test order validation")
+                # Use validation token if provided by run_multi.py, otherwise use hardcoded BTC
+                if hasattr(self, '_validation_token_id') and self._validation_token_id:
+                    test_token_id = self._validation_token_id
+                    logger.info(f"Using provided market token for test order validation")
+                else:
+                    # Fallback to hardcoded BTC market token
+                    test_token_id = "21742633143463906290569050155826241533067272736897614950488156847949938836455"  # BTC
+                    logger.info(f"Using fallback BTC market token for test order validation")
                 
                 try:
                     from src.signer import Order
