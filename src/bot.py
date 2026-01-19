@@ -383,6 +383,48 @@ class TradingBot:
                 # Ensure USDC approval for CTF exchange
                 await self.approve_usdc_gasless()
                 logger.info("✓ Proxy setup (deployment/approval) initiated.")
+                
+                # 3b. Test order placement (validate Builder auth works)
+                logger.info("Testing order placement authentication...")
+                try:
+                    # Create a test order (we won't submit it, just validate signing and headers)
+                    test_token_id = "99914208981568816645551301561974062576963636618104166856807686031985202521238"  # BTC UP
+                    
+                    from src.signer import Order
+                    import random
+                    
+                    test_order = Order(
+                        token_id=test_token_id,
+                        price=0.01,  # Very low price to avoid accidental execution
+                        size=0.01,   # Minimal size
+                        side="BUY",
+                        maker=self.config.safe_address,
+                        expiration=0,
+                        salt=random.randint(1, 10**12),
+                        nonce=None,
+                        fee_rate_bps=0,
+                        signature_type=self.config.clob.signature_type,
+                    )
+                    
+                    # Sign with Proxy address as owner
+                    api_key = self.config.safe_address
+                    signed = self.signer.sign_order(test_order, api_key=api_key)
+                    
+                    # Build headers to verify Builder credentials are included
+                    import json
+                    body_json = json.dumps(signed, separators=(',', ':'))
+                    headers = self.clob_client._build_headers("POST", "/order", body_json)
+                    
+                    if "POLY_BUILDER_API_KEY" not in headers:
+                        logger.error("✗ Builder credentials NOT included in order headers!")
+                        logger.error("   This will cause 401 errors when placing orders.")
+                        success = False
+                    else:
+                        logger.info("✓ Order authentication validated (Builder credentials present)")
+                        
+                except Exception as e:
+                    logger.error(f"✗ Order validation failed: {e}")
+                    success = False
 
         # 4. Check Balance
         try:
