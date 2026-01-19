@@ -540,11 +540,11 @@ class ClobClient(ApiClient):
         # Debug: Log headers to diagnose 401 errors
         import logging
         logger = logging.getLogger(__name__)
-        logger.debug(f"POST /order headers: {list(headers.keys())}")
+        logger.info(f"[ORDER] POST /order headers: {list(headers.keys())}")
         if "POLY_BUILDER_API_KEY" in headers:
-            logger.debug("  ✓ Builder credentials included")
+            logger.info("[ORDER]   ✓ Builder credentials included")
         else:
-            logger.warning("  ✗ Builder credentials MISSING from order request!")
+            logger.warning("[ORDER]   ✗ Builder credentials MISSING from order request!")
 
         return self._request(
             "POST",
