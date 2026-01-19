@@ -272,18 +272,18 @@ def main():
     
     # Fetch the first market to use for validation
     first_coin = coins[0] if coins else "BTC"
-    logger.info(f"Fetching {first_coin} market for validation...")
+    print(f"{Colors.CYAN}Fetching {first_coin} market for validation...{Colors.RESET}")
     market_manager = MarketManager()
     try:
         market_info = asyncio.run(market_manager.get_market(first_coin))
         if market_info and market_info.token_id:
             # Store the token ID in the bot for validation
             bot._validation_token_id = market_info.token_id
-            logger.info(f"Using {first_coin} market (token: {market_info.token_id[:20]}...) for validation")
+            print(f"{Colors.GREEN}✓ Using {first_coin} market for validation{Colors.RESET}")
         else:
-            logger.warning(f"Could not fetch {first_coin} market, validation will use fallback")
+            print(f"{Colors.YELLOW}⚠ Could not fetch {first_coin} market, validation will use fallback{Colors.RESET}")
     except Exception as e:
-        logger.warning(f"Error fetching market for validation: {e}")
+        print(f"{Colors.YELLOW}⚠ Error fetching market: {e}{Colors.RESET}")
     
     # Wait for user confirmation before starting
     print(f"\n{Colors.CYAN}{'='*80}{Colors.RESET}")
