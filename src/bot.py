@@ -517,7 +517,7 @@ class TradingBot:
         size: float,
         side: str,
         order_type: str = "GTC",
-        fee_rate_bps: int = 0
+        fee_rate_bps: int = 1000  # Default 10% maker fee (1000 basis points)
     ) -> OrderResult:
         """
         Place a limit order.
