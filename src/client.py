@@ -280,10 +280,10 @@ class ClobClient(ApiClient):
             })
 
         # User API credentials (L2 authentication)
-        # Builder credentials are for ATTRIBUTION (tracking volume)
-        # User L2 credentials are for AUTHENTICATION (proving authorization)
-        # Both are needed! Builder alone won't authenticate you.
-        if self.api_creds and self.api_creds.is_valid():
+        # L2 API keys are bound to EOA addresses, not Proxy addresses
+        # Proxy mode (signature_type=2) uses Builder credentials exclusively
+        # Sending L2 API creds with Proxy address causes 401 (address mismatch)
+        if self.api_creds and self.api_creds.is_valid() and self.signature_type == 0:
             timestamp = str(int(time.time()))
 
             # Build message: timestamp + method + path + body

@@ -226,11 +226,13 @@ class TradingBot:
         # Initialize API clients
         self._init_clients()
 
-        # Auto-derive API credentials for all modes
-        # Builder credentials are for ATTRIBUTION, L2 API credentials are for AUTHENTICATION
-        # Proxy mode needs BOTH!
-        if self.signer and not self._api_creds:
+        # Auto-derive API credentials ONLY for EOA mode (signature_type=0)
+        # Proxy mode uses Builder credentials exclusively
+        # L2 API keys are bound to EOA addresses and can't be used with Proxy addresses
+        if self.signer and not self._api_creds and self.config.clob.signature_type == 0:
             self._derive_api_creds()
+        elif self.config.clob.signature_type == 2:
+            logger.info("Proxy mode: Using Builder credentials for authentication (skipping L2 API key)")
 
         # Components for auto-discovery
         self.gamma_client = GammaClient(host=self.config.clob.host.replace("clob", "gamma-api"))
