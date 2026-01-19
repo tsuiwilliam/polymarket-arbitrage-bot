@@ -326,13 +326,8 @@ class ClobClient(ApiClient):
         auth_signature = signer.sign_auth_message(timestamp=timestamp, nonce=nonce)
 
         # L1 headers
-        # IMPORTANT: For Proxy (Safe) wallets, the POLY_ADDRESS header must be the
-        # Proxy address (funder), even though the signature comes from the EOA.
-        # This tells the server "I authorized this key for MY PROXY".
-        auth_address = self.funder if self.funder and self.signature_type != 0 else signer.address
-        
         headers = {
-            "POLY_ADDRESS": auth_address,
+            "POLY_ADDRESS": signer.address,
             "POLY_SIGNATURE": auth_signature,
             "POLY_TIMESTAMP": timestamp,
             "POLY_NONCE": str(nonce),
@@ -365,10 +360,8 @@ class ClobClient(ApiClient):
         auth_signature = signer.sign_auth_message(timestamp=timestamp, nonce=nonce)
 
         # L1 headers
-        auth_address = self.funder if self.funder and self.signature_type != 0 else signer.address
-        
         headers = {
-            "POLY_ADDRESS": auth_address,
+            "POLY_ADDRESS": signer.address,
             "POLY_SIGNATURE": auth_signature,
             "POLY_TIMESTAMP": timestamp,
             "POLY_NONCE": str(nonce),
