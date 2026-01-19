@@ -282,16 +282,17 @@ class TradingBot:
         # If using SAFE (type 1/2), funder should be the Safe address
         funder_address = self.config.safe_address
         
-        # If safe_address is empty but we're using gasless/proxy mode, derive it
-        if not funder_address and self.config.use_gasless and self.signer:
-            from src.utils import get_proxy_address
-            funder_address = get_proxy_address(self.signer.address)
-            logger.info(f"Derived Safe address from EOA: {funder_address}")
-            # Update config for consistency
-            self.config.safe_address = funder_address
-        elif self.config.clob.signature_type == 0 and self.signer:
+        # Debug: Log what addresses we're using
+        logger.info(f"Funder address init: safe_address={self.config.safe_address}, sig_type={self.config.clob.signature_type}")
+        
+        if self.config.clob.signature_type == 0 and self.signer:
             funder_address = self.signer.address
             logger.info(f"Using EOA address {funder_address} as funder (Signature Type 0)")
+        
+        # Final check: if still empty, use signer address
+        if not funder_address and self.signer:
+            funder_address = self.signer.address
+            logger.warning(f"Funder address was empty, falling back to signer: {funder_address}")
         
         self.clob_client = ClobClient(
             host=self.config.clob.host,
