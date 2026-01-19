@@ -99,27 +99,33 @@ class Order:
         # Convert to integers for blockchain
         # BUY: Maker gives USDC (price*size), Maker receives Token (size)
         # SELL: Maker gives Token (size), Maker receives USDC (price*size)
-        # IMPORTANT: Polymarket has decimal precision limits:
+        # IMPORTANT: Polymarket uses floor/truncation (NOT rounding) for decimal precision:
         #   - BUY orders: maker amount (USDC) max 4 decimals, taker amount (tokens) max 2 decimals
         #   - SELL orders: maker amount (tokens) max 2 decimals, taker amount (USDC) max 4 decimals
         
+        import math
+        
         if self.side == "BUY":
-            # Maker gives USDC - round to 4 decimals before converting to raw amount
-            usdc_amount = round(self.size * self.price, 4)
-            self.maker_amount = str(int(usdc_amount * 10**USDC_DECIMALS))
+            # Maker gives USDC - floor to 4 decimals then convert to raw amount
+            usdc_raw = self.size * self.price * 10**USDC_DECIMALS
+            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100  # Floor to 4 decimal places
+            self.maker_amount = str(int(usdc_floor_4dp))
             
-            # Maker receives Token - round to 2 decimals before converting to raw amount
-            token_amount = round(self.size, 2)
-            self.taker_amount = str(int(token_amount * 10**USDC_DECIMALS))
+            # Maker receives Token - floor to 2 decimals then convert to raw amount
+            token_raw = self.size * 10**USDC_DECIMALS
+            token_floor_2dp = math.floor(token_raw / 10000) * 10000  # Floor to 2 decimal places
+            self.taker_amount = str(int(token_floor_2dp))
             self.side_value = 0
         else:
-            # Maker gives Token - round to 2 decimals before converting to raw amount
-            token_amount = round(self.size, 2)
-            self.maker_amount = str(int(token_amount * 10**USDC_DECIMALS))
+            # Maker gives Token - floor to 2 decimals then convert to raw amount
+            token_raw = self.size * 10**USDC_DECIMALS
+            token_floor_2dp = math.floor(token_raw / 10000) * 10000  # Floor to 2 decimal places
+            self.maker_amount = str(int(token_floor_2dp))
             
-            # Maker receives USDC - round to 4 decimals before converting to raw amount
-            usdc_amount = round(self.size * self.price, 4)
-            self.taker_amount = str(int(usdc_amount * 10**USDC_DECIMALS))
+            # Maker receives USDC - floor to 4 decimals then convert to raw amount
+            usdc_raw = self.size * self.price * 10**USDC_DECIMALS
+            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100  # Floor to 4 decimal places
+            self.taker_amount = str(int(usdc_floor_4dp))
             self.side_value = 1
 
 
@@ -306,20 +312,7 @@ class OrderSigner:
                 "signatureType": int(order.signature_type),
             }
             
-            # Log EIP-712 domain and message for debugging
-            logger.info("=" * 80)
-            logger.info("EIP-712 SIGNING DEBUG")
-            logger.info("=" * 80)
-            logger.info(f"Domain:")
-            logger.info(f"  name: {self.ORDER_DOMAIN['name']}")
-            logger.info(f"  version: {self.ORDER_DOMAIN['version']}")
-            logger.info(f"  chainId: {self.ORDER_DOMAIN['chainId']}")
-            logger.info(f"  verifyingContract: {self.ORDER_DOMAIN['verifyingContract']}")
-            logger.info(f"")
-            logger.info(f"Order Message (EIP-712 struct):")
-            for key, value in order_message.items():
-                logger.info(f"  {key}: {value}")
-            logger.info("=" * 80)
+            # EIP-712 signing (debug logging removed - auth confirmed working)
 
             # DEBUG: For Signature Type 2, sometimes 'signer' must be the Maker
             if order.signature_type == 2:
@@ -337,8 +330,7 @@ class OrderSigner:
 
             # Return the JSON payload structure required by POST /order
             # Note: The 'order' object fields MUST be camelCase.
-            # Types based on official SDK inspection:
-            payload = {
+            return {
                 "order": {
                     "salt": order.salt,
                     "maker": to_checksum_address(order.maker),
@@ -358,14 +350,6 @@ class OrderSigner:
                 "orderType": order_type,
                 "postOnly": False,
             }
-            
-            # Log final JSON payload
-            logger.info("Final JSON Payload (POST /order):")
-            import json
-            logger.info(json.dumps(payload, indent=2))
-            logger.info("=" * 80)
-            
-            return payload
 
         except Exception as e:
             raise SignerError(f"Failed to sign order: {e}")
