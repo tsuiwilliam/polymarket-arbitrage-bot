@@ -212,6 +212,7 @@ class ClobClient(ApiClient):
         funder: str = "",
         api_creds: Optional[ApiCredentials] = None,
         builder_creds: Optional[BuilderConfig] = None,
+        signer_address: str = "",
         timeout: int = 30
     ):
         """
@@ -224,6 +225,7 @@ class ClobClient(ApiClient):
             funder: Funder/Safe address
             api_creds: User API credentials (optional)
             builder_creds: Builder credentials for attribution (optional)
+            signer_address: EOA signer address (for POLY_ADDRESS header)
             timeout: Request timeout
         """
         super().__init__(base_url=host, timeout=timeout)
@@ -233,6 +235,7 @@ class ClobClient(ApiClient):
         self.funder = funder
         self.api_creds = api_creds
         self.builder_creds = builder_creds
+        self.signer_address = signer_address
         self.ws = MarketWebSocket()  # Initialize shared WebSocket
         
         # Balance cache to avoid rate limiting on RPC calls
@@ -308,7 +311,7 @@ class ClobClient(ApiClient):
             # CRITICAL: POLY_ADDRESS must match the address used to derive the API key
             # API keys are derived using the EOA signer, so POLY_ADDRESS = EOA address
             # even in Proxy mode. The funder (Proxy) is specified in the order payload.
-            poly_address = self.api_creds.api_key.split("-")[0] if "-" in self.api_creds.api_key else self.funder
+            poly_address = self.signer_address if self.signer_address else self.funder
 
             headers.update({
                 "POLY_ADDRESS": poly_address,

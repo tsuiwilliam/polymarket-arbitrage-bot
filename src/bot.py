@@ -292,6 +292,7 @@ class TradingBot:
             funder=funder_address,
             api_creds=self._api_creds,
             builder_creds=self.config.builder if self.config.use_gasless else None,
+            signer_address=self.signer.address if self.signer else "",
         )
 
         # Relayer client (for gasless)
