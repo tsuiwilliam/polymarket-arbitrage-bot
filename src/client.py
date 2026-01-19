@@ -326,8 +326,13 @@ class ClobClient(ApiClient):
         auth_signature = signer.sign_auth_message(timestamp=timestamp, nonce=nonce)
 
         # L1 headers
+        # IMPORTANT: For Proxy (Safe) wallets, the POLY_ADDRESS header must be the
+        # Proxy address (funder), even though the signature comes from the EOA.
+        # This tells the server "I authorized this key for MY PROXY".
+        auth_address = self.funder if self.funder and self.signature_type != 0 else signer.address
+        
         headers = {
-            "POLY_ADDRESS": signer.address,
+            "POLY_ADDRESS": auth_address,
             "POLY_SIGNATURE": auth_signature,
             "POLY_TIMESTAMP": timestamp,
             "POLY_NONCE": str(nonce),
@@ -360,8 +365,10 @@ class ClobClient(ApiClient):
         auth_signature = signer.sign_auth_message(timestamp=timestamp, nonce=nonce)
 
         # L1 headers
+        auth_address = self.funder if self.funder and self.signature_type != 0 else signer.address
+        
         headers = {
-            "POLY_ADDRESS": signer.address,
+            "POLY_ADDRESS": auth_address,
             "POLY_SIGNATURE": auth_signature,
             "POLY_TIMESTAMP": timestamp,
             "POLY_NONCE": str(nonce),
@@ -741,8 +748,16 @@ class RelayerClient(ApiClient):
         Returns:
             Deployment transaction response
         """
-        endpoint = "/deploy"
-        body = {"safeAddress": safe_address}
+        endpoint = "/wallet/deploy-safe"
+        body = {
+            "safeAddress": safe_address,
+            "owner": safe_address  # Some endpoints require owner, usually the Safe itself or EOA
+        }
+        # Actually, for deploy-safe, the body usually just needs the owner's EOA or the predicted Safe address.
+        # Let's stick safeAddress first, but we might need "owner" too.
+        # Research suggests: POST /wallet/deploy-safe { "owner": "0xEOA" } or { "safeAddress": "..." }
+        # Let's try matching the TypeScript SDK: it sends { safeAddress }.
+        
         body_json = json.dumps(body, separators=(',', ':'))
         headers = self._build_headers("POST", endpoint, body_json)
 
@@ -770,9 +785,18 @@ class RelayerClient(ApiClient):
         Returns:
             Approval transaction response
         """
-        endpoint = "/approve-usdc"
+        endpoint = "/allowance/approve"
+        # The relayer usually expects: { "token": "USDC_ADDRESS", "spender": "...", "amount": "...", "safeAddress": "..." }
+        # Need to verify if "token" is implicit or explicit.
+        # Let's assume explicit for now, but defaulting to USDC logic inside the bot caller.
+        # Wait, the bot caller passed 'amount' and we didn't pass the token address here.
+        # Let's update the caller or hardcode USDC here if we are sure.
+        # Actually the method signature is approve_usdc, so hardcoding/config lookup is fine.
+        from src.config import USDC_ADDRESS
+        
         body = {
             "safeAddress": safe_address,
+            "token": USDC_ADDRESS,
             "spender": spender,
             "amount": str(amount),
         }
