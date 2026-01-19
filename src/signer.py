@@ -272,25 +272,43 @@ class OrderSigner:
             order: Order to sign
             api_key: API key string to use as owner (required by Polymarket)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
             # Build order message for EIP-712 (values MUST follow ORDER_TYPES)
             order_message = {
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
                 # For Gnosis Safe (Type 2), documentation specifies:
-                # - 'maker' is the Safe address
-                # - 'signer' is the EOA address authorized to sign for the Safe
-                "signer": to_checksum_address(self.address), 
-                "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
+                # - "maker" = Safe address
+                # - "signer" = EOA address (the one signing)
+                "signer": to_checksum_address(self.address),
+                "taker": to_checksum_address("0x0000000000000000000000000000000000000000"), # Taker is always zero address for CLOB
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
                 "takerAmount": int(order.taker_amount),
-                "expiration": order.expiration,
-                "nonce": order.nonce,
-                "feeRateBps": order.fee_rate_bps,
-                "side": order.side_value, # side as int (0/1) for signature
-                "signatureType": order.signature_type,
+                "expiration": int(order.expiration),
+                "nonce": int(order.nonce),
+                "feeRateBps": int(order.fee_rate_bps),
+                "side": int(order.side_value),
+                "signatureType": int(order.signature_type),
             }
+            
+            # Log EIP-712 domain and message for debugging
+            logger.info("=" * 80)
+            logger.info("EIP-712 SIGNING DEBUG")
+            logger.info("=" * 80)
+            logger.info(f"Domain:")
+            logger.info(f"  name: {self.ORDER_DOMAIN['name']}")
+            logger.info(f"  version: {self.ORDER_DOMAIN['version']}")
+            logger.info(f"  chainId: {self.ORDER_DOMAIN['chainId']}")
+            logger.info(f"  verifyingContract: {self.ORDER_DOMAIN['verifyingContract']}")
+            logger.info(f"")
+            logger.info(f"Order Message (EIP-712 struct):")
+            for key, value in order_message.items():
+                logger.info(f"  {key}: {value}")
+            logger.info("=" * 80)
 
             # DEBUG: For Signature Type 2, sometimes 'signer' must be the Maker
             if order.signature_type == 2:
@@ -309,7 +327,7 @@ class OrderSigner:
             # Return the JSON payload structure required by POST /order
             # Note: The 'order' object fields MUST be camelCase.
             # Types based on official SDK inspection:
-            return {
+            payload = {
                 "order": {
                     "salt": order.salt,
                     "maker": to_checksum_address(order.maker),
@@ -320,15 +338,23 @@ class OrderSigner:
                     "takerAmount": str(order.taker_amount),
                     "expiration": str(order.expiration),
                     "nonce": str(order.nonce),
-                    "feeRateBps": str(order.fee_rate_bps), # String "0"
-                    "side": order.side, # String "BUY" or "SELL"
+                    "feeRateBps": str(order.fee_rate_bps),
+                    "side": order.side,  # "BUY" or "SELL" as string in JSON
                     "signatureType": int(order.signature_type),
                     "signature": "0x" + signed.signature.hex(),
                 },
-                "owner": api_key if api_key else self.address,
+                "owner": api_key,
                 "orderType": order_type,
                 "postOnly": False,
             }
+            
+            # Log final JSON payload
+            logger.info("Final JSON Payload (POST /order):")
+            import json
+            logger.info(json.dumps(payload, indent=2))
+            logger.info("=" * 80)
+            
+            return payload
 
         except Exception as e:
             raise SignerError(f"Failed to sign order: {e}")
