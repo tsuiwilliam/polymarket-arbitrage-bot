@@ -143,7 +143,7 @@ class OrderSigner:
         "name": "Polymarket CLOB Exchange",
         "version": "1",
         "chainId": 137,
-        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
+        "verifyingContract": "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E", # Update to Exchange address found in docs
     }
 
     # Order type definition for EIP-712
@@ -271,7 +271,10 @@ class OrderSigner:
             order_message = {
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
-                "signer": to_checksum_address(self.address),
+                # For Gnosis Safe (Type 2), the 'signer' field in the EIP-712 struct
+                # might need to match the maker (Safe) address, or be the EOA.
+                # Standard Polymarket behavior: signer field is the address signing the data.
+                "signer": to_checksum_address(self.address), 
                 "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
@@ -282,6 +285,11 @@ class OrderSigner:
                 "side": order.side_value, # side as int (0/1) for signature
                 "signatureType": order.signature_type,
             }
+
+            # DEBUG: For Signature Type 2, sometimes 'signer' must be the Maker
+            if order.signature_type == 2:
+                 # Override signer to be maker? No, let's keep EOA first but ensure valid checksums
+                 pass
 
             # Sign the order using ORDER_DOMAIN
             signable = encode_typed_data(
