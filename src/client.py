@@ -665,8 +665,57 @@ class ClobClient(ApiClient):
         except Exception as e:
             # Log the error for debugging
             import logging
-            logging.getLogger(__name__).warning(f"Failed to get collateral balance: {e}")
+            logger = logging.getLogger(__name__)
+            
+            # If API fails (common in Proxy mode without L2 API keys),
+            # fall back to on-chain balance query
+            if "401" in str(e) or "Unauthorized" in str(e):
+                logger.info("API balance check failed (no L2 API key), querying blockchain directly...")
+                try:
+                    return self._get_onchain_usdc_balance()
+                except Exception as e2:
+                    logger.warning(f"On-chain balance query also failed: {e2}")
+            else:
+                logger.warning(f"Failed to get collateral balance: {e}")
         return 0.0
+    
+    def _get_onchain_usdc_balance(self) -> float:
+        """
+        Query USDC balance directly from blockchain.
+        Used as fallback when API authentication fails.
+        """
+        try:
+            from web3 import Web3
+            from src.config import USDC_ADDRESS
+            
+            # Connect to Polygon RPC
+            w3 = Web3(Web3.HTTPProvider("https://polygon-rpc.com"))
+            
+            # USDC contract ABI (just the balanceOf function)
+            usdc_abi = [{
+                "constant": True,
+                "inputs": [{"name": "_owner", "type": "address"}],
+                "name": "balanceOf",
+                "outputs": [{"name": "balance", "type": "uint256"}],
+                "type": "function"
+            }]
+            
+            usdc_contract = w3.eth.contract(
+                address=Web3.to_checksum_address(USDC_ADDRESS),
+                abi=usdc_abi
+            )
+            
+            # Query balance
+            balance_wei = usdc_contract.functions.balanceOf(
+                Web3.to_checksum_address(self.funder)
+            ).call()
+            
+            # USDC has 6 decimals
+            return float(balance_wei) / 1_000_000
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"On-chain balance query failed: {e}")
+            return 0.0
 
 
 class RelayerClient(ApiClient):
