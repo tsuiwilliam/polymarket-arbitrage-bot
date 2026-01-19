@@ -301,23 +301,21 @@ class OrderSigner:
             signed = self.wallet.sign_message(signable)
 
             # Return the JSON payload structure required by POST /order
-            # Note: The 'order' object internal fields must be snake_case for the API,
-            # even though the EIP-712 hashing used camelCase internally.
+            # Note: The 'order' object fields MUST be camelCase to match the EIP-712 struct
             return {
                 "order": {
                     "salt": order.salt,
                     "maker": to_checksum_address(order.maker),
-                    # The JSON payload's 'signer' field MUST match the one used in the EIP-712 struct
                     "signer": to_checksum_address(self.address),
                     "taker": "0x0000000000000000000000000000000000000000",
-                    "token_id": str(order.token_id),
-                    "maker_amount": str(order.maker_amount),
-                    "taker_amount": str(order.taker_amount),
+                    "tokenId": str(order.token_id),
+                    "makerAmount": str(order.maker_amount),
+                    "takerAmount": str(order.taker_amount),
                     "expiration": str(order.expiration),
                     "nonce": str(order.nonce),
-                    "fee_rate_bps": int(order.fee_rate_bps),
-                    "side": order.side,
-                    "signature_type": int(order.signature_type),
+                    "feeRateBps": int(order.fee_rate_bps),
+                    "side": str(order.side_value), # String of index ("0" or "1")
+                    "signatureType": int(order.signature_type),
                     "signature": "0x" + signed.signature.hex(),
                 },
                 "owner": api_key if api_key else self.address,
