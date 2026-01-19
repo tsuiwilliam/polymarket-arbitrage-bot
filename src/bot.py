@@ -554,7 +554,7 @@ class TradingBot:
             # Example: "faa27da2-xxxx-xxxx-xxxx", not "0x186DaFe3..."
             api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
             
-            signed = signer.sign_order(order, api_key=api_key)
+            signed = signer.sign_order(order, api_key=api_key, order_type=order_type)
 
             # Log physical payload for debugging auth issues
             logger.info(f"[ORDER] Owner (API key): {signed.get('owner', 'N/A')[:16]}...")

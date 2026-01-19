@@ -93,8 +93,8 @@ class Order:
             raise ValueError(f"Invalid size: {self.size}")
 
         if self.nonce is None:
-            # Use microsecond precision to avoid collisions in same-second orders
-            self.nonce = int(time.time() * 1_000_000)
+            # Polymarket standard defaults to 0 for new orders
+            self.nonce = 0
 
         # Convert to integers for blockchain
         # BUY: Maker gives USDC (price*size), Maker receives Token (size)
@@ -143,7 +143,7 @@ class OrderSigner:
         "name": "Polymarket CLOB Exchange",
         "version": "1",
         "chainId": 137,
-        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
+        "verifyingContract": "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E", # Standard CTF Exchange
     }
 
     # Order type definition for EIP-712
@@ -258,7 +258,7 @@ class OrderSigner:
         signed = self.wallet.sign_message(signable)
         return "0x" + signed.signature.hex()
 
-    def sign_order(self, order: Order, api_key: str = None) -> Dict[str, Any]:
+    def sign_order(self, order: Order, api_key: str = None, order_type: str = "GTC") -> Dict[str, Any]:
         """
         Sign a Polymarket order.
         
@@ -271,10 +271,10 @@ class OrderSigner:
             order_message = {
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
-                # For Gnosis Safe (Type 2), the 'signer' field in the EIP-712 struct
-                # MUST be the Safe address (maker), not the EOA.
-                # The EOA signs the hash of this struct.
-                "signer": to_checksum_address(order.maker) if order.signature_type in [1, 2] else to_checksum_address(self.address),
+                # For Gnosis Safe (Type 2), documentation specifies:
+                # - 'maker' is the Safe address
+                # - 'signer' is the EOA address authorized to sign for the Safe
+                "signer": to_checksum_address(self.address), 
                 "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
@@ -301,24 +301,27 @@ class OrderSigner:
             signed = self.wallet.sign_message(signable)
 
             # Return the JSON payload structure required by POST /order
+            # Note: The 'order' object internal fields must be snake_case for the API,
+            # even though the EIP-712 hashing used camelCase internally.
             return {
                 "order": {
                     "salt": order.salt,
                     "maker": to_checksum_address(order.maker),
                     # The JSON payload's 'signer' field MUST match the one used in the EIP-712 struct
-                    "signer": to_checksum_address(order.maker) if order.signature_type in [1, 2] else to_checksum_address(self.address),
+                    "signer": to_checksum_address(self.address),
                     "taker": "0x0000000000000000000000000000000000000000",
-                    "tokenId": str(order.token_id),
-                    "makerAmount": str(order.maker_amount),
-                    "takerAmount": str(order.taker_amount),
+                    "token_id": str(order.token_id),
+                    "maker_amount": str(order.maker_amount),
+                    "taker_amount": str(order.taker_amount),
                     "expiration": str(order.expiration),
                     "nonce": str(order.nonce),
-                    "feeRateBps": str(order.fee_rate_bps),
+                    "fee_rate_bps": int(order.fee_rate_bps),
                     "side": order.side,
-                    "signatureType": int(order.signature_type),
+                    "signature_type": int(order.signature_type),
                     "signature": "0x" + signed.signature.hex(),
                 },
-                "owner": api_key, # THE API KEY STRING, NOT THE ADDRESS
+                "owner": api_key if api_key else self.address,
+                "orderType": order_type,
                 "postOnly": False,
             }
 
