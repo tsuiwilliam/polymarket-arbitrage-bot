@@ -168,6 +168,31 @@ def main():
         sys.exit(1)
 
     config = Config.from_env()
+    
+    # Interactive Setup for Gasless Mode
+    if not config.use_gasless:
+        print(f"\n{Colors.YELLOW}Gasless transactions are NOT configured.{Colors.RESET}")
+        print("To enable 'One-Click' automated setup (auto-proxy & gasless trades),")
+        print("you need to provide Master Builder credentials (or your own Builder keys).")
+        
+        choice = input(f"\n{Colors.BOLD}Do you want to set them up now? (y/n): {Colors.RESET}").strip().lower()
+        if choice in ('y', 'yes'):
+            print(f"\n{Colors.CYAN}--- Master Builder Setup ---{Colors.RESET}")
+            print("Enter the credentials. These will be used for this session.")
+            m_key = input("API Key: ").strip()
+            m_secret = input("API Secret: ").strip()
+            m_pass = input("Passphrase: ").strip()
+            
+            if m_key and m_secret and m_pass:
+                os.environ["POLY_MASTER_BUILDER_KEY"] = m_key
+                os.environ["POLY_MASTER_BUILDER_SECRET"] = m_secret
+                os.environ["POLY_MASTER_BUILDER_PASSPHRASE"] = m_pass
+                # Reload config to pick up new env vars
+                config = Config.from_env()
+                print(f"{Colors.GREEN}✓ Credentials set. Gasless mode enabled.{Colors.RESET}\n")
+            else:
+                print(f"{Colors.RED}✗ Invalid credentials provided. Skipping.{Colors.RESET}\n")
+
     bot = TradingBot(config=config, private_key=private_key)
 
     if not bot.is_initialized():
