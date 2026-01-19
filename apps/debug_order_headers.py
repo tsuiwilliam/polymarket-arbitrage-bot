@@ -8,9 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.config import Config
-from src.signer import OrderSigner
+from src.signer import OrderSigner, Order
 from src.client import ClobClient
-from src.order import Order
 import time
 import random
 
