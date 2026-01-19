@@ -351,8 +351,14 @@ class TradingBot:
             await self._run_in_thread(self.clob_client.get_open_orders)
             logger.info("✓ User API Key valid.")
         except Exception as e:
-            logger.error(f"✗ User API credentials invalid or expired: {e}")
-            success = False
+            if self.config.clob.signature_type == 2:
+                # In Proxy mode, L2 API check may fail but Builder auth is sufficient for orders
+                logger.warning(f"! L2 API check failed in Proxy mode (expected): {e}")
+                logger.info("✓ Proxy mode: Builder credentials will be used for order placement")
+            else:
+                # In EOA mode, L2 API credentials are required
+                logger.error(f"✗ User API credentials invalid or expired: {e}")
+                success = False
 
         # 3. Check Builder API (if gasless)
         if self.config.use_gasless:
