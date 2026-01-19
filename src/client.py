@@ -680,9 +680,14 @@ class ClobClient(ApiClient):
             Balance as float (USDC)
         """
         import time
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"[BALANCE] get_collateral_balance() called. Funder: {self.funder}")
         
         # Check cache first
         if time.time() - self._balance_cache_time < self._balance_cache_ttl:
+            logger.info(f"[BALANCE] Returning cached balance: ${self._balance_cache:.2f}")
             return self._balance_cache
         
         try:
@@ -690,11 +695,14 @@ class ClobClient(ApiClient):
             params = {"asset_type": "COLLATERAL"}
             headers = self._build_headers("GET", endpoint)
             
+            logger.info("[BALANCE] Trying API query...")
             res = self._request("GET", endpoint, headers=headers, params=params)
             
             # Response format: {"balance": "1000000", "allowances": ...}
             raw_balance = res.get("balance", "0")
             balance = float(raw_balance) / 1_000_000 # USDC has 6 decimals
+            
+            logger.info(f"[BALANCE] API returned: ${balance:.2f}")
             
             # Update cache
             self._balance_cache = balance
@@ -702,13 +710,11 @@ class ClobClient(ApiClient):
             return balance
         except Exception as e:
             # Log the error for debugging
-            import logging
-            logger = logging.getLogger(__name__)
             
             # If API fails (common in Proxy mode without L2 API keys),
             # fall back to on-chain balance query
             if "401" in str(e) or "Unauthorized" in str(e):
-                logger.info("API balance check failed (no L2 API key), querying blockchain directly...")
+                logger.info("[BALANCE] API unauthorized, falling back to on-chain query...")
                 try:
                     balance = self._get_onchain_usdc_balance()
                     # Update cache
@@ -716,11 +722,12 @@ class ClobClient(ApiClient):
                     self._balance_cache_time = time.time()
                     return balance
                 except Exception as e2:
-                    logger.warning(f"On-chain balance query also failed: {e2}")
+                    logger.warning(f"[BALANCE] On-chain query failed: {e2}")
             else:
-                logger.warning(f"Failed to get collateral balance: {e}")
+                logger.warning(f"[BALANCE] API query failed (non-401): {e}")
         
         # Return cached value if available, otherwise 0
+        logger.info(f"[BALANCE] Returning cached/default: ${self._balance_cache:.2f}")
         return self._balance_cache if self._balance_cache > 0 else 0.0
     
     def _get_onchain_usdc_balance(self) -> float:
@@ -731,6 +738,10 @@ class ClobClient(ApiClient):
         try:
             from web3 import Web3
             from src.config import USDC_ADDRESS
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[BALANCE] On-chain query for address: {self.funder}")
             
             # Connect to Polygon RPC
             w3 = Web3(Web3.HTTPProvider("https://polygon-rpc.com"))
@@ -755,10 +766,12 @@ class ClobClient(ApiClient):
             ).call()
             
             # USDC has 6 decimals
-            return float(balance_wei) / 1_000_000
+            balance = float(balance_wei) / 1_000_000
+            logger.info(f"[BALANCE] On-chain balance for {self.funder}: ${balance:.2f}")
+            return balance
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error(f"On-chain balance query failed: {e}")
+            logging.getLogger(__name__).error(f"[BALANCE] On-chain query error: {e}")
             return 0.0
 
 
