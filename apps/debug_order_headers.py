@@ -7,6 +7,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Load .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.config import Config
 from src.signer import OrderSigner, Order
 from src.client import ClobClient
