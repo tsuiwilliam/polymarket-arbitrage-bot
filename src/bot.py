@@ -464,8 +464,16 @@ class TradingBot:
                 signature_type=self.config.clob.signature_type,
             )
 
-            # Sign order with API key as owner
-            api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
+            # Sign order with appropriate owner
+            # In Proxy mode (signature_type=2), owner is the Proxy address
+            # In EOA mode (signature_type=0), owner is the API key
+            if self.config.clob.signature_type == 2:
+                # Proxy mode: owner is the Proxy wallet address
+                api_key = self.config.safe_address
+            else:
+                # EOA mode: owner is the API key
+                api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
+            
             signed = signer.sign_order(order, api_key=api_key)
 
             # Log physical payload for debugging auth issues
