@@ -34,6 +34,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.terminal_utils import Colors
+from lib.market_manager import MarketManager
 from src.bot import TradingBot
 from src.config import Config
 from apps.flash_crash_strategy import FlashCrashStrategy, FlashCrashConfig
