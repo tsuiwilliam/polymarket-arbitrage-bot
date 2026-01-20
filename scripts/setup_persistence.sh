@@ -31,8 +31,8 @@ cd "$PROJECT_DIR"
 
 while true; do
     echo "Starting Multi-Market Bot..."
-    # Run the bot
-    python3 apps/run_multi.py --coins BTC,ETH,SOL,XRP --drop 0.20 --size 0.5
+    # Run the bot with your specific parameters
+    python3 apps/run_multi.py --coins BTC,ETH,SOL,XRP --drop 0.20 --size 0.5 2>&1 | tee -a bot.log
     
     EXIT_CODE=$?
     echo "Bot crashed or stopped with code $EXIT_CODE. Restarting in 5 seconds..."
