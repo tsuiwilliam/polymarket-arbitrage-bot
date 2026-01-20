@@ -95,47 +95,42 @@ class GammaClient(ThreadLocalSessionMixin):
         current_window = now.replace(minute=minute, second=0, microsecond=0)
         current_ts = int(current_window.timestamp())
 
-        # Try current window
+        # Try current window ONLY
         slug = f"{prefix}-{current_ts}"
-        market = self.get_market_by_slug(slug)
+        
+        # Helper to check market
+        def check_market(s):
+            m = self.get_market_by_slug(s)
+            if m and m.get("acceptingOrders"):
+                return m, True
+            return m, False
+
+        market, active = check_market(slug)
         
         logger = logging.getLogger(__name__)
         
-        if market:
-            is_accepting = market.get("acceptingOrders")
-            if is_accepting:
-                logger.info(f"[{coin}] Found current market: {slug}")
-                return market
-            else:
-                logger.info(f"[{coin}] Current market {slug} found but acceptingOrders={is_accepting}")
-        else:
-            logger.debug(f"[{coin}] Current market {slug} not found")
-
-        # Try next window (in case current just ended)
-        next_ts = current_ts + 900  # 15 minutes
-        slug = f"{prefix}-{next_ts}"
-        market = self.get_market_by_slug(slug)
-
-        if market:
-            is_accepting = market.get("acceptingOrders")
-            if is_accepting:
-                logger.info(f"[{coin}] Rolling to NEXT market: {slug}")
-                return market
-            else:
-                logger.debug(f"[{coin}] Next market {slug} found but acceptingOrders={is_accepting}")
+        if active:
+            logger.info(f"[{coin}] Found current market: {slug}")
+            return market
         
-        # Try previous window (might still be active)
-        prev_ts = current_ts - 900
-        slug = f"{prefix}-{prev_ts}"
-        market = self.get_market_by_slug(slug)
+        # Strict Mode: If current market isn't active, we simply wait.
+        # We do NOT roll over to the next market because the strategy isn't designed for it.
+        # We can retry a few times quickly to handle transient API glitches.
+        if market and not active:
+            logger.warning(f"[{coin}] Current market {slug} inactive (acceptingOrders=False). Retrying...")
+            # Retry loop for strict current market
+            for i in range(3):
+                import time
+                time.sleep(1.0)
+                market, active = check_market(slug)
+                if active:
+                    logger.info(f"[{coin}] Found current market on retry {i+1}: {slug}")
+                    return market
+            
+            logger.warning(f"[{coin}] Current market {slug} still inactive after retries. Waiting for API/Market open.")
+        else:
+            logger.debug(f"[{coin}] Current market {slug} not found yet.")
 
-        if market:
-            is_accepting = market.get("acceptingOrders")
-            if is_accepting:
-                logger.info(f"[{coin}] Fallback to PREVIOUS market: {slug}")
-                return market
-                
-        logger.warning(f"[{coin}] No active 15m markets found!")
         return None
 
     def get_next_15m_market(self, coin: str) -> Optional[Dict[str, Any]]:
