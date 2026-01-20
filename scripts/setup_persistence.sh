@@ -23,16 +23,22 @@ else
     echo -e "${GREEN}✓ tmux is installed${NC}"
 fi
 
-# 2. Create the runner script (auto-restart loop)
+# 2. Create the runner script (auto-restart loop with argument forwarding)
 cat << 'EOF' > run_bot_loop.sh
 #!/bin/bash
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
+# Default arguments if none provided
+DEFAULT_ARGS="--coins BTC,ETH,SOL,XRP --drop 0.20 --size 0.5"
+BOT_ARGS="${@:-$DEFAULT_ARGS}"
+
+echo "Bot will run with arguments: $BOT_ARGS"
+
 while true; do
     echo "Starting Multi-Market Bot..."
-    # Run the bot with your specific parameters
-    python3 apps/run_multi.py --coins BTC,ETH,SOL,XRP --drop 0.20 --size 0.5 2>&1 | tee -a bot.log
+    # Forward all arguments to the bot
+    python3 apps/run_multi.py $BOT_ARGS 2>&1 | tee -a bot.log
     
     EXIT_CODE=$?
     echo "Bot crashed or stopped with code $EXIT_CODE. Restarting in 5 seconds..."
@@ -43,7 +49,7 @@ EOF
 chmod +x run_bot_loop.sh
 echo -e "${GREEN}✓ Created run_bot_loop.sh (auto-restart enabled)${NC}"
 
-# 3. Create the startup script (tmux session manager)
+# 3. Create the startup script (tmux session manager with argument forwarding)
 cat << 'EOF' > start_bot_session.sh
 #!/bin/bash
 SESSION_NAME="arb-bot"
@@ -54,9 +60,11 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     tmux attach-session -t "$SESSION_NAME"
 else
     echo "Starting new session $SESSION_NAME..."
-    # Start tmux session detached, running the loop script
-    tmux new-session -d -s "$SESSION_NAME" ./run_bot_loop.sh
-    echo "Bot started in background. Use 'tmux attach -t $SESSION_NAME' to view."
+    # Forward all arguments to the loop script
+    # Usage: ./start_bot_session.sh --coins BTC,ETH --drop 0.15 --size 1.0
+    tmux new-session -d -s "$SESSION_NAME" "./run_bot_loop.sh $*"
+    echo "Bot started in background with args: $*"
+    echo "Use 'tmux attach -t $SESSION_NAME' to view."
 fi
 EOF
 
