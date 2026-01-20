@@ -105,31 +105,38 @@ class Order:
         #   3. Floor USDC to 4 decimals
         
         import math
+        from decimal import Decimal, ROUND_DOWN
         
         if self.side == "BUY":
-            # Step 1: Floor token size to 2 decimals
-            token_raw = self.size * 10**USDC_DECIMALS
-            token_floor_2dp = math.floor(token_raw / 10000) * 10000
-            self.taker_amount = str(int(token_floor_2dp))
+            # Use Decimal for exact precision
+            size_dec = Decimal(str(self.size))
+            price_dec = Decimal(str(self.price))
             
-            # Step 2: Calculate USDC from FLOORED token amount
-            floored_token_size = token_floor_2dp / 10**USDC_DECIMALS
-            usdc_raw = floored_token_size * self.price * 10**USDC_DECIMALS
-            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100
-            self.maker_amount = str(int(usdc_floor_4dp))
+            # Step 1: Floor token size to 2 decimals
+            token_floor_2dp = int((size_dec * Decimal('1000000')).quantize(Decimal('10000'), rounding=ROUND_DOWN))
+            self.taker_amount = str(token_floor_2dp)
+            
+            # Step 2: Calculate USDC from FLOORED token amount (using Decimal)
+            floored_token_dec = Decimal(token_floor_2dp) / Decimal('1000000')
+            usdc_dec = floored_token_dec * price_dec * Decimal('1000000')
+            usdc_floor_4dp = int(usdc_dec.quantize(Decimal('100'), rounding=ROUND_DOWN))
+            self.maker_amount = str(usdc_floor_4dp)
             
             self.side_value = 0
         else:
-            # Step 1: Floor token size to 2 decimals
-            token_raw = self.size * 10**USDC_DECIMALS
-            token_floor_2dp = math.floor(token_raw / 10000) * 10000
-            self.maker_amount = str(int(token_floor_2dp))
+            # Use Decimal for exact precision
+            size_dec = Decimal(str(self.size))
+            price_dec = Decimal(str(self.price))
             
-            # Step 2: Calculate USDC from FLOORED token amount
-            floored_token_size = token_floor_2dp / 10**USDC_DECIMALS
-            usdc_raw = floored_token_size * self.price * 10**USDC_DECIMALS
-            usdc_floor_4dp = math.floor(usdc_raw / 100) * 100
-            self.taker_amount = str(int(usdc_floor_4dp))
+            # Step 1: Floor token size to 2 decimals
+            token_floor_2dp = int((size_dec * Decimal('1000000')).quantize(Decimal('10000'), rounding=ROUND_DOWN))
+            self.maker_amount = str(token_floor_2dp)
+            
+            # Step 2: Calculate USDC from FLOORED token amount (using Decimal)
+            floored_token_dec = Decimal(token_floor_2dp) / Decimal('1000000')
+            usdc_dec = floored_token_dec * price_dec * Decimal('1000000')
+            usdc_floor_4dp = int(usdc_dec.quantize(Decimal('100'), rounding=ROUND_DOWN))
+            self.taker_amount = str(usdc_floor_4dp)
             
             self.side_value = 1
 
