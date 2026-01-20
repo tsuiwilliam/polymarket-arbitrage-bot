@@ -65,6 +65,14 @@ async def run_strategies(bot: TradingBot, strategies: List[FlashCrashStrategy]):
             lines.append(f"{Colors.BOLD}{'='*80}{Colors.RESET}")
             lines.append(f"{Colors.BOLD} Multi-Market Bot | Balance: ${balance:.2f}{Colors.RESET}")
             lines.append(f"{Colors.CYAN} Wallet: {maker_address[:10]}...{maker_address[-8:]} ({sig_type_name}){Colors.RESET}")
+            
+            # Show strategy settings (get from first strategy since they're all the same)
+            if strategies:
+                s = strategies[0]
+                coins_list = ', '.join([st.config.coin for st in strategies])
+                lines.append(f"{Colors.YELLOW} Settings: Drop={s.config.drop_threshold:.0%} | Size=${s.config.size:.2f} | TP={s.config.take_profit:.0%} | SL={s.config.stop_loss:.0%}{Colors.RESET}")
+                lines.append(f"{Colors.YELLOW} Coins: {coins_list}{Colors.RESET}")
+            
             lines.append(f"{Colors.BOLD}{'='*80}{Colors.RESET}")
             
             # Header
