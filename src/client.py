@@ -460,7 +460,8 @@ class ClobClient(ApiClient):
         try:
             # Use params dict instead of query string in endpoint
             response = self._request("GET", "/fee-rate", params={"token_id": token_id})
-            fee_rate = int(response.get("fee_rate_bps", 0))
+            # CRITICAL: API returns 'base_fee' not 'fee_rate_bps'
+            fee_rate = int(response.get("base_fee", 0))
             logger.info(f"Fee rate for token {token_id[:8]}...: {fee_rate} bps (response: {response})")
             
             if fee_rate == 0:
