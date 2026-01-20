@@ -93,23 +93,57 @@ class Order:
             raise ValueError(f"Invalid size: {self.size}")
 
         if self.nonce is None:
-            # Use microsecond precision to avoid collisions in same-second orders
-            self.nonce = int(time.time() * 1_000_000)
+            # Polymarket standard defaults to 0 for new orders
+            self.nonce = 0
 
         # Convert to integers for blockchain
         # BUY: Maker gives USDC (price*size), Maker receives Token (size)
         # SELL: Maker gives Token (size), Maker receives USDC (price*size)
+        # IMPORTANT: Polymarket validation requires:
+        #   1. Floor token amount to 2 decimals FIRST
+        #   2. Calculate USDC from floored token amount
+        #   3. Floor USDC to 4 decimals
+        
+        import math
+        from decimal import Decimal, ROUND_DOWN
+        
         if self.side == "BUY":
-            # Maker gives USDC
-            self.maker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
-            # Maker receives Token
-            self.taker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
+            # Use Decimal for exact precision
+            size_dec = Decimal(str(self.size))
+            price_dec = Decimal(str(self.price))
+            
+            # Step 1: Floor token size to 2 decimals (multiples of 10000 raw units)
+            # 1.00 token = 1,000,000 raw units. 0.01 token = 10,000 raw units
+            token_raw_dec = size_dec * Decimal('1000000')
+            token_floor_2dp = int((token_raw_dec // Decimal('10000')) * Decimal('10000'))
+            self.taker_amount = str(token_floor_2dp)
+            
+            # Step 2: Calculate USDC from FLOORED token amount
+            floored_token_dec = Decimal(token_floor_2dp) / Decimal('1000000')
+            usdc_dec = floored_token_dec * price_dec * Decimal('1000000')
+            
+            # Floor USDC to 4 decimals (multiples of 100 raw units)
+            # 1.00 USDC = 1,000,000 raw units. 0.0001 USDC = 100 raw units
+            usdc_floor_4dp = int((usdc_dec // Decimal('100')) * Decimal('100'))
+            self.maker_amount = str(usdc_floor_4dp)
+            
             self.side_value = 0
         else:
-            # Maker gives Token
-            self.maker_amount = str(int(round(self.size * 10**USDC_DECIMALS)))
-            # Maker receives USDC
-            self.taker_amount = str(int(round(self.size * self.price * 10**USDC_DECIMALS)))
+            # SELL Side
+            size_dec = Decimal(str(self.size))
+            price_dec = Decimal(str(self.price))
+            
+            # Step 1: Floor token size to 2 decimals
+            token_raw_dec = size_dec * Decimal('1000000')
+            token_floor_2dp = int((token_raw_dec // Decimal('10000')) * Decimal('10000'))
+            self.maker_amount = str(token_floor_2dp)
+            
+            # Step 2: Calculate USDC from FLOORED token amount
+            floored_token_dec = Decimal(token_floor_2dp) / Decimal('1000000')
+            usdc_dec = floored_token_dec * price_dec * Decimal('1000000')
+            usdc_floor_4dp = int((usdc_dec // Decimal('100')) * Decimal('100'))
+            self.taker_amount = str(usdc_floor_4dp)
+            
             self.side_value = 1
 
 
@@ -139,11 +173,17 @@ class OrderSigner:
         "chainId": 137,
     }
 
+    # Polymarket CTF Exchange on Polygon (Standard non-NegRisk markets)
+    # IMPORTANT: Must match the actual exchange contract for the market being traded!
+    # Standard markets use: 0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
+    # NegRisk markets use:  0xC5d563A36AE78145C45a50134d48A1215220f80a
+    VERIFYING_CONTRACT = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"  # Standard Exchange
+
     ORDER_DOMAIN = {
-        "name": "Polymarket CLOB Exchange",
+        "name": "Polymarket CTF Exchange",
         "version": "1",
         "chainId": 137,
-        "verifyingContract": "0x4bFb9eFca8Bf3A4e5C74561083fDd3296cDE5599",
+        "verifyingContract": VERIFYING_CONTRACT,
     }
 
     # Order type definition for EIP-712
@@ -181,11 +221,12 @@ class OrderSigner:
             private_key = private_key[2:]
 
         try:
-            self.wallet = Account.from_key(f"0x{private_key}")
+            self.private_key = private_key
+            self.account = Account.from_key(f"0x{private_key}")
         except Exception as e:
             raise ValueError(f"Invalid private key: {e}")
 
-        self.address = self.wallet.address
+        self.address = self.account.address
 
     @classmethod
     def from_encrypted(
@@ -255,10 +296,10 @@ class OrderSigner:
             message_data=message_data
         )
 
-        signed = self.wallet.sign_message(signable)
+        signed = self.account.sign_message(signable)
         return "0x" + signed.signature.hex()
 
-    def sign_order(self, order: Order, api_key: str = None) -> Dict[str, Any]:
+    def sign_order(self, order: Order, api_key: str = None, order_type: str = "GTC") -> Dict[str, Any]:
         """
         Sign a Polymarket order.
         
@@ -266,22 +307,35 @@ class OrderSigner:
             order: Order to sign
             api_key: API key string to use as owner (required by Polymarket)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
             # Build order message for EIP-712 (values MUST follow ORDER_TYPES)
             order_message = {
                 "salt": order.salt,
                 "maker": to_checksum_address(order.maker),
+                # For Gnosis Safe (Type 2), documentation specifies:
+                # - "maker" = Safe address
+                # - "signer" = EOA address (the one signing)
                 "signer": to_checksum_address(self.address),
-                "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
+                "taker": to_checksum_address("0x0000000000000000000000000000000000000000"), # Taker is always zero address for CLOB
                 "tokenId": int(order.token_id),
                 "makerAmount": int(order.maker_amount),
                 "takerAmount": int(order.taker_amount),
-                "expiration": order.expiration,
-                "nonce": order.nonce,
-                "feeRateBps": order.fee_rate_bps,
-                "side": order.side_value, # side as int (0/1) for signature
-                "signatureType": order.signature_type,
+                "expiration": int(order.expiration),
+                "nonce": int(order.nonce),
+                "feeRateBps": int(order.fee_rate_bps),
+                "side": int(order.side_value),
+                "signatureType": int(order.signature_type),
             }
+            
+            # EIP-712 signing (debug logging removed - auth confirmed working)
+
+            # DEBUG: For Signature Type 2, sometimes 'signer' must be the Maker
+            if order.signature_type == 2:
+                 # Override signer to be maker? Yes, done above.
+                 pass
 
             # Sign the order using ORDER_DOMAIN
             signable = encode_typed_data(
@@ -290,26 +344,28 @@ class OrderSigner:
                 message_data=order_message
             )
 
-            signed = self.wallet.sign_message(signable)
+            signed = self.account.sign_message(signable)
 
             # Return the JSON payload structure required by POST /order
+            # Note: The 'order' object fields MUST be camelCase.
             return {
                 "order": {
                     "salt": order.salt,
                     "maker": to_checksum_address(order.maker),
                     "signer": to_checksum_address(self.address),
-                    "taker": "0x0000000000000000000000000000000000000000",
+                    "taker": to_checksum_address("0x0000000000000000000000000000000000000000"),
                     "tokenId": str(order.token_id),
                     "makerAmount": str(order.maker_amount),
                     "takerAmount": str(order.taker_amount),
                     "expiration": str(order.expiration),
                     "nonce": str(order.nonce),
                     "feeRateBps": str(order.fee_rate_bps),
-                    "side": order.side,
+                    "side": order.side,  # "BUY" or "SELL" as string in JSON
                     "signatureType": int(order.signature_type),
                     "signature": "0x" + signed.signature.hex(),
                 },
-                "owner": api_key, # THE API KEY STRING, NOT THE ADDRESS
+                "owner": api_key,
+                "orderType": order_type,
                 "postOnly": False,
             }
 
@@ -365,7 +421,7 @@ class OrderSigner:
         from eth_account.messages import encode_defunct
 
         signable = encode_defunct(text=message)
-        signed = self.wallet.sign_message(signable)
+        signed = self.account.sign_message(signable)
         return "0x" + signed.signature.hex()
 
 

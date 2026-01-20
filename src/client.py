@@ -212,6 +212,7 @@ class ClobClient(ApiClient):
         funder: str = "",
         api_creds: Optional[ApiCredentials] = None,
         builder_creds: Optional[BuilderConfig] = None,
+        signer_address: str = "",
         timeout: int = 30
     ):
         """
@@ -224,6 +225,7 @@ class ClobClient(ApiClient):
             funder: Funder/Safe address
             api_creds: User API credentials (optional)
             builder_creds: Builder credentials for attribution (optional)
+            signer_address: EOA signer address (for POLY_ADDRESS header)
             timeout: Request timeout
         """
         super().__init__(base_url=host, timeout=timeout)
@@ -233,6 +235,7 @@ class ClobClient(ApiClient):
         self.funder = funder
         self.api_creds = api_creds
         self.builder_creds = builder_creds
+        self.signer_address = signer_address
         self.ws = MarketWebSocket()  # Initialize shared WebSocket
         
         # Balance cache to avoid rate limiting on RPC calls
@@ -280,9 +283,11 @@ class ClobClient(ApiClient):
             })
 
         # User API credentials (L2 authentication)
-        # Only use L2 API credentials in EOA mode (signature_type=0)
-        # Proxy mode (signature_type=2) uses Builder credentials exclusively
-        if self.api_creds and self.api_creds.is_valid() and self.signature_type == 0:
+        # Per Polymarket docs: "Do not use Builder API credentials in place of User API credentials!"
+        # Builder credentials are for ATTRIBUTION (leaderboard tracking)
+        # User L2 credentials are for AUTHENTICATION (authorization)
+        # BOTH must be sent in headers!
+        if self.api_creds and self.api_creds.is_valid():
             timestamp = str(int(time.time()))
 
             # Build message: timestamp + method + path + body
@@ -303,8 +308,13 @@ class ClobClient(ApiClient):
                     hashlib.sha256
                 ).hexdigest()
 
+            # CRITICAL: POLY_ADDRESS must match the address used to derive the API key
+            # API keys are derived using the EOA signer, so POLY_ADDRESS = EOA address
+            # even in Proxy mode. The funder (Proxy) is specified in the order payload.
+            poly_address = self.signer_address if self.signer_address else self.funder
+
             headers.update({
-                "POLY_ADDRESS": self.funder,
+                "POLY_ADDRESS": poly_address,
                 "POLY_API_KEY": self.api_creds.api_key,
                 "POLY_TIMESTAMP": timestamp,
                 "POLY_PASSPHRASE": self.api_creds.passphrase,
@@ -436,6 +446,34 @@ class ClobClient(ApiClient):
             params={"token_id": token_id}
         )
 
+    def get_fee_rate(self, token_id: str) -> int:
+        """
+        Get the fee rate for a specific token/market.
+        
+        Args:
+            token_id: Token ID
+            
+        Returns:
+            Fee rate in basis points (e.g., 1000 = 10%, 0 = fee-free)
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Use params dict instead of query string in endpoint
+            response = self._request("GET", "/fee-rate", params={"token_id": token_id})
+            # CRITICAL: API returns 'base_fee' not 'fee_rate_bps'
+            fee_rate = int(response.get("base_fee", 0))
+            logger.info(f"Fee rate for token {token_id[:8]}...: {fee_rate} bps (response: {response})")
+            
+            if fee_rate == 0:
+                logger.warning(f"API returned 0 bps for token {token_id[:8]}... - this may be incorrect!")
+            
+            return fee_rate
+        except Exception as e:
+            logger.error(f"Fee rate query FAILED for {token_id[:8]}...: {e}")
+            raise  # Don't hide errors - fail loudly so we can fix the root cause
+
     def get_open_orders(self) -> List[Dict[str, Any]]:
         """
         Get all open orders for the funder.
@@ -538,6 +576,15 @@ class ClobClient(ApiClient):
 
         body_json = json.dumps(body, separators=(',', ':'))
         headers = self._build_headers("POST", endpoint, body_json)
+        
+        # Debug: Log headers to diagnose 401 errors
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[ORDER] POST /order headers: {list(headers.keys())}")
+        if "POLY_BUILDER_API_KEY" in headers:
+            logger.info("[ORDER]   ✓ Builder credentials included")
+        else:
+            logger.warning("[ORDER]   ✗ Builder credentials MISSING from order request!")
 
         return self._request(
             "POST",
@@ -663,21 +710,43 @@ class ClobClient(ApiClient):
             Balance as float (USDC)
         """
         import time
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"[BALANCE] get_collateral_balance() called. Funder: {self.funder}")
         
         # Check cache first
         if time.time() - self._balance_cache_time < self._balance_cache_ttl:
+            logger.info(f"[BALANCE] Returning cached balance: ${self._balance_cache:.2f}")
             return self._balance_cache
         
+        # For Proxy wallets (sig type 2), always use on-chain query
+        # The API returns balance based on auth headers (EOA), not the funder address
+        if self.signature_type == 2:
+            logger.info("[BALANCE] Signature type 2 (Proxy) - using on-chain query")
+            try:
+                balance = self._get_onchain_usdc_balance()
+                self._balance_cache = balance
+                self._balance_cache_time = time.time()
+                return balance
+            except Exception as e:
+                logger.warning(f"[BALANCE] On-chain query failed: {e}")
+                return self._balance_cache if self._balance_cache > 0 else 0.0
+        
+        # For EOA wallets, try API first
         try:
             endpoint = "/balance-allowance"
             params = {"asset_type": "COLLATERAL"}
             headers = self._build_headers("GET", endpoint)
             
+            logger.info("[BALANCE] Trying API query...")
             res = self._request("GET", endpoint, headers=headers, params=params)
             
             # Response format: {"balance": "1000000", "allowances": ...}
             raw_balance = res.get("balance", "0")
             balance = float(raw_balance) / 1_000_000 # USDC has 6 decimals
+            
+            logger.info(f"[BALANCE] API returned: ${balance:.2f}")
             
             # Update cache
             self._balance_cache = balance
@@ -685,13 +754,11 @@ class ClobClient(ApiClient):
             return balance
         except Exception as e:
             # Log the error for debugging
-            import logging
-            logger = logging.getLogger(__name__)
             
             # If API fails (common in Proxy mode without L2 API keys),
             # fall back to on-chain balance query
             if "401" in str(e) or "Unauthorized" in str(e):
-                logger.info("API balance check failed (no L2 API key), querying blockchain directly...")
+                logger.info("[BALANCE] API unauthorized, falling back to on-chain query...")
                 try:
                     balance = self._get_onchain_usdc_balance()
                     # Update cache
@@ -699,11 +766,12 @@ class ClobClient(ApiClient):
                     self._balance_cache_time = time.time()
                     return balance
                 except Exception as e2:
-                    logger.warning(f"On-chain balance query also failed: {e2}")
+                    logger.warning(f"[BALANCE] On-chain query failed: {e2}")
             else:
-                logger.warning(f"Failed to get collateral balance: {e}")
+                logger.warning(f"[BALANCE] API query failed (non-401): {e}")
         
         # Return cached value if available, otherwise 0
+        logger.info(f"[BALANCE] Returning cached/default: ${self._balance_cache:.2f}")
         return self._balance_cache if self._balance_cache > 0 else 0.0
     
     def _get_onchain_usdc_balance(self) -> float:
@@ -714,6 +782,10 @@ class ClobClient(ApiClient):
         try:
             from web3 import Web3
             from src.config import USDC_ADDRESS
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[BALANCE] On-chain query for address: {self.funder}")
             
             # Connect to Polygon RPC
             w3 = Web3(Web3.HTTPProvider("https://polygon-rpc.com"))
@@ -738,10 +810,12 @@ class ClobClient(ApiClient):
             ).call()
             
             # USDC has 6 decimals
-            return float(balance_wei) / 1_000_000
+            balance = float(balance_wei) / 1_000_000
+            logger.info(f"[BALANCE] On-chain balance for {self.funder}: ${balance:.2f}")
+            return balance
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error(f"On-chain balance query failed: {e}")
+            logging.getLogger(__name__).error(f"[BALANCE] On-chain query error: {e}")
             return 0.0
 
 

@@ -34,6 +34,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.terminal_utils import Colors
+from lib.market_manager import MarketManager
 from src.bot import TradingBot
 from src.config import Config
 from apps.flash_crash_strategy import FlashCrashStrategy, FlashCrashConfig
@@ -251,6 +252,51 @@ def main():
         print(f"{Colors.RED}Failed to initialize bot. Check your private key.{Colors.RESET}")
         sys.exit(1)
 
+    # Fetch the first market BEFORE validation so token is available
+    first_coin = coins[0] if coins else "BTC"
+    print(f"{Colors.CYAN}Fetching {first_coin} market for validation...{Colors.RESET}")
+    
+    async def fetch_market_for_validation():
+        """Fetch market using strategy's market manager."""
+        try:
+            # Create a temporary strategy to fetch the market
+            temp_cfg = FlashCrashConfig(
+                coin=first_coin,
+                size=0.01,
+                drop_threshold=0.20,
+                take_profit=0.05,
+                stop_loss=0.10,
+                render_enabled=False
+            )
+            temp_strategy = FlashCrashStrategy(bot, temp_cfg)
+            
+            # Start the market manager
+            await temp_strategy.market.start()
+            
+            # Wait for market to be fetched (up to 10 seconds)
+            for _ in range(20):  # 20 * 0.5s = 10s
+                if temp_strategy.market.current_market and temp_strategy.market.token_ids:
+                    # Use the UP token for validation
+                    token_id = temp_strategy.market.token_ids.get('up')
+                    if token_id:
+                        return token_id
+                await asyncio.sleep(0.5)
+            
+            return None
+        except Exception as e:
+            print(f"{Colors.RED}✗ Error in market fetch: {e}{Colors.RESET}")
+            return None
+    
+    try:
+        token_id = asyncio.run(fetch_market_for_validation())
+        if token_id:
+            bot._validation_token_id = token_id
+            print(f"{Colors.GREEN}✓ Using {first_coin} market for validation{Colors.RESET}")
+        else:
+            print(f"{Colors.RED}✗ Could not fetch {first_coin} market, validation will fail{Colors.RESET}")
+    except Exception as e:
+        print(f"{Colors.RED}✗ Error fetching market: {e}{Colors.RESET}")
+
     # Sanity check at startup
     if not asyncio.run(bot.verify_setup()):
         print(f"{Colors.RED}Startup checks failed. Please check your credentials and balance.{Colors.RESET}")
@@ -269,6 +315,13 @@ def main():
         
         print(f"{Colors.YELLOW}Proceeding anyway in 3 seconds...{Colors.RESET}")
         time.sleep(3)
+    
+
+    
+    # Wait for user confirmation before starting
+    print(f"\n{Colors.CYAN}{'='*80}{Colors.RESET}")
+    input(f"{Colors.BOLD}Validation complete. Press Enter to start trading (or Ctrl+C to cancel)...{Colors.RESET} ")
+    print(f"{Colors.CYAN}{'='*80}{Colors.RESET}\n")
 
     strategies = []
     for coin in coins:

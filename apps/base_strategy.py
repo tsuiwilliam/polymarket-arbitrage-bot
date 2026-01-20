@@ -343,10 +343,14 @@ class BaseStrategy(ABC):
             self.log(f"No token ID for {side}", "error")
             return False
 
-        size = self.config.size / current_price
+        # Calculate buy price with small premium to ensure fills
         buy_price = min(current_price + 0.02, 0.99)
+        
+        # IMPORTANT: Calculate size based on buy_price, not current_price
+        # This ensures maker_amount = size * buy_price is correct
+        size = self.config.size / buy_price
 
-        self.log(f"BUY {side.upper()} @ {current_price:.4f} size={size:.2f}", "trade")
+        self.log(f"BUY {side.upper()} @ {buy_price:.4f} size={size:.2f}", "trade")
 
         result = await self.bot.place_order(
             token_id=token_id,

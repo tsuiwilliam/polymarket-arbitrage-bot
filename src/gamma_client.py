@@ -98,26 +98,44 @@ class GammaClient(ThreadLocalSessionMixin):
         # Try current window
         slug = f"{prefix}-{current_ts}"
         market = self.get_market_by_slug(slug)
-
-        if market and market.get("acceptingOrders"):
-            return market
+        
+        logger = logging.getLogger(__name__)
+        
+        if market:
+            is_accepting = market.get("acceptingOrders")
+            if is_accepting:
+                logger.info(f"[{coin}] Found current market: {slug}")
+                return market
+            else:
+                logger.info(f"[{coin}] Current market {slug} found but acceptingOrders={is_accepting}")
+        else:
+            logger.debug(f"[{coin}] Current market {slug} not found")
 
         # Try next window (in case current just ended)
         next_ts = current_ts + 900  # 15 minutes
         slug = f"{prefix}-{next_ts}"
         market = self.get_market_by_slug(slug)
 
-        if market and market.get("acceptingOrders"):
-            return market
-
+        if market:
+            is_accepting = market.get("acceptingOrders")
+            if is_accepting:
+                logger.info(f"[{coin}] Rolling to NEXT market: {slug}")
+                return market
+            else:
+                logger.debug(f"[{coin}] Next market {slug} found but acceptingOrders={is_accepting}")
+        
         # Try previous window (might still be active)
         prev_ts = current_ts - 900
         slug = f"{prefix}-{prev_ts}"
         market = self.get_market_by_slug(slug)
 
-        if market and market.get("acceptingOrders"):
-            return market
-
+        if market:
+            is_accepting = market.get("acceptingOrders")
+            if is_accepting:
+                logger.info(f"[{coin}] Fallback to PREVIOUS market: {slug}")
+                return market
+                
+        logger.warning(f"[{coin}] No active 15m markets found!")
         return None
 
     def get_next_15m_market(self, coin: str) -> Optional[Dict[str, Any]]:

@@ -226,12 +226,11 @@ class TradingBot:
         # Initialize API clients
         self._init_clients()
 
-        # Auto-derive API credentials ONLY for EOA mode (signature_type=0)
-        # Proxy wallets (signature_type=2) use Builder credentials exclusively
-        if self.signer and not self._api_creds and self.config.clob.signature_type == 0:
+        # Auto-derive API credentials for all modes
+        # Per Polymarket docs: User API credentials are needed for ClobClient constructor
+        # even in Proxy mode, though only Builder credentials are sent in request headers
+        if self.signer and not self._api_creds:
             self._derive_api_creds()
-        elif self.config.clob.signature_type == 2:
-            logger.info("Proxy mode: Using Builder credentials for authentication (skipping L2 API key)")
 
         # Components for auto-discovery
         self.gamma_client = GammaClient(host=self.config.clob.host.replace("clob", "gamma-api"))
@@ -282,9 +281,18 @@ class TradingBot:
         # If using EOA (type 0), funder should be the EOA address (signer)
         # If using SAFE (type 1/2), funder should be the Safe address
         funder_address = self.config.safe_address
+        
+        # Debug: Log what addresses we're using
+        logger.info(f"Funder address init: safe_address={self.config.safe_address}, sig_type={self.config.clob.signature_type}")
+        
         if self.config.clob.signature_type == 0 and self.signer:
             funder_address = self.signer.address
             logger.info(f"Using EOA address {funder_address} as funder (Signature Type 0)")
+        
+        # Final check: if still empty, use signer address
+        if not funder_address and self.signer:
+            funder_address = self.signer.address
+            logger.warning(f"Funder address was empty, falling back to signer: {funder_address}")
         
         self.clob_client = ClobClient(
             host=self.config.clob.host,
@@ -293,6 +301,7 @@ class TradingBot:
             funder=funder_address,
             api_creds=self._api_creds,
             builder_creds=self.config.builder if self.config.use_gasless else None,
+            signer_address=self.signer.address if self.signer else "",
         )
 
         # Relayer client (for gasless)
@@ -344,18 +353,22 @@ class TradingBot:
         else:
             logger.info(f"✓ Signer loaded: {self.signer.address}")
 
-        # 2. Check User API Credentials (only for EOA mode)
-        # Proxy mode uses Builder credentials exclusively
-        if self.config.clob.signature_type == 0:
-            try:
-                # get_open_orders is a reliable health check for L2 auth
-                await self._run_in_thread(self.clob_client.get_open_orders)
-                logger.info("✓ User API Key valid.")
-            except Exception as e:
+        # 2. Check User API Credentials
+        # Both EOA and Proxy modes need L2 API credentials for authentication
+        # Builder credentials are for attribution only
+        try:
+            # get_open_orders is a reliable health check for L2 auth
+            await self._run_in_thread(self.clob_client.get_open_orders)
+            logger.info("✓ User API Key valid.")
+        except Exception as e:
+            if self.config.clob.signature_type == 2:
+                # In Proxy mode, L2 API check may fail but Builder auth is sufficient for orders
+                logger.warning(f"! L2 API check failed in Proxy mode (expected): {e}")
+                logger.info("✓ Proxy mode: Builder credentials will be used for order placement")
+            else:
+                # In EOA mode, L2 API credentials are required
                 logger.error(f"✗ User API credentials invalid or expired: {e}")
                 success = False
-        else:
-            logger.info("✓ Proxy mode: Skipping L2 API check (using Builder auth)")
 
         # 3. Check Builder API (if gasless)
         if self.config.use_gasless:
@@ -384,47 +397,94 @@ class TradingBot:
                 await self.approve_usdc_gasless()
                 logger.info("✓ Proxy setup (deployment/approval) initiated.")
                 
-                # 3b. Test order placement (validate Builder auth works)
-                logger.info("Testing order placement authentication...")
-                try:
-                    # Create a test order (we won't submit it, just validate signing and headers)
-                    test_token_id = "99914208981568816645551301561974062576963636618104166856807686031985202521238"  # BTC UP
-                    
-                    from src.signer import Order
-                    import random
-                    
-                    test_order = Order(
-                        token_id=test_token_id,
-                        price=0.01,  # Very low price to avoid accidental execution
-                        size=0.01,   # Minimal size
-                        side="BUY",
-                        maker=self.config.safe_address,
-                        expiration=0,
-                        salt=random.randint(1, 10**12),
-                        nonce=None,
-                        fee_rate_bps=0,
-                        signature_type=self.config.clob.signature_type,
-                    )
-                    
-                    # Sign with Proxy address as owner
-                    api_key = self.config.safe_address
-                    signed = self.signer.sign_order(test_order, api_key=api_key)
-                    
-                    # Build headers to verify Builder credentials are included
-                    import json
-                    body_json = json.dumps(signed, separators=(',', ':'))
-                    headers = self.clob_client._build_headers("POST", "/order", body_json)
-                    
-                    if "POLY_BUILDER_API_KEY" not in headers:
-                        logger.error("✗ Builder credentials NOT included in order headers!")
-                        logger.error("   This will cause 401 errors when placing orders.")
-                        success = False
-                    else:
-                        logger.info("✓ Order authentication validated (Builder credentials present)")
-                        
-                except Exception as e:
-                    logger.error(f"✗ Order validation failed: {e}")
+                # 3b. Test order placement (validate auth works end-to-end)
+                logger.info("Testing order placement authentication with live API call...")
+                
+                # Require validation token - we need to test auth before real trades
+                if not hasattr(self, '_validation_token_id') or not self._validation_token_id:
+                    logger.error("✗ No validation token provided - cannot test order placement")
+                    logger.error("  Market fetch failed - check network/API connectivity")
                     success = False
+                else:
+                    test_token_id = self._validation_token_id
+                    logger.info(f"Using provided market token for test order validation")
+                
+                    try:
+                        from src.signer import Order
+                        import random
+                        import json
+                        
+                        # Fetch the actual fee rate for this market
+                        try:
+                            test_fee_rate = self.clob_client.get_fee_rate(test_token_id)
+                            logger.info(f"Test order using market fee rate: {test_fee_rate} bps")
+                        except Exception as e:
+                            logger.warning(f"Could not fetch fee rate, using default 1000: {e}")
+                            test_fee_rate = 1000
+                        
+                        test_order = Order(
+                            token_id=test_token_id,
+                            price=0.01,   # Low price to avoid matching
+                            size=0.01,    # Small size - will fail validation but confirms auth works
+                            side="BUY",
+                            maker=self.config.safe_address,
+                            expiration=0,
+                            salt=random.randint(1, 10**12),
+                            nonce=None,
+                            fee_rate_bps=test_fee_rate,
+                            signature_type=self.config.clob.signature_type,
+                        )
+                        
+                        # Sign the order
+                        # Owner must be the L2 API key STRING, not an address
+                        api_key = self.clob_client.api_creds.api_key
+                        signed = self.signer.sign_order(test_order, api_key=api_key)
+                        
+                        # Build headers
+                        body_json = json.dumps(signed, separators=(',', ':'))
+                        headers = self.clob_client._build_headers("POST", "/order", body_json)
+                        
+                        # Log headers for debugging
+                        logger.info(f"Test order headers: {list(headers.keys())}")
+                        if "POLY_BUILDER_API_KEY" in headers:
+                            logger.info("  ✓ Builder credentials included")
+                        if "POLY_API_KEY" in headers:
+                            logger.info(f"  ✓ User L2 credentials included (POLY_ADDRESS: {headers.get('POLY_ADDRESS', 'N/A')})")
+                        
+                        # Actually POST the test order to the server
+                        logger.info("Submitting test order to Polymarket API...")
+                        try:
+                            response = await self._run_in_thread(
+                                self.clob_client.post_order,
+                                signed,
+                                "GTC"
+                            )
+                            logger.info(f"✓ Test order ACCEPTED! Order ID: {response.get('orderID', 'N/A')}")
+                            logger.info("  Authentication is working correctly!")
+                            # Cancel the test order immediately
+                            try:
+                                await self._run_in_thread(
+                                    self.clob_client.cancel_order,
+                                    response.get('orderID')
+                                )
+                                logger.info("  Test order cancelled successfully")
+                            except:
+                                pass  # Ignore cancel errors
+                        except Exception as post_error:
+                            error_msg = str(post_error)
+                            logger.error(f"✗ Test order REJECTED: {error_msg}")
+                            if "401" in error_msg or "Unauthorized" in error_msg:
+                                logger.error("  → Authentication failure - credentials are invalid or mismatched")
+                                logger.error(f"  → Check that POLY_ADDRESS matches the address used to derive API key")
+                                success = False
+                            elif "400" in error_msg:
+                                logger.warning("  → Order format issue (but auth might be OK)")
+                            else:
+                                logger.error(f"  → Unexpected error: {error_msg}")
+                                success = False
+                    except Exception as e:
+                        logger.error(f"✗ Order validation failed: {e}")
+                        success = False
 
         # 4. Check Balance
         try:
@@ -465,7 +525,7 @@ class TradingBot:
         size: float,
         side: str,
         order_type: str = "GTC",
-        fee_rate_bps: int = 0
+        fee_rate_bps: int = 1000  # Default 10% maker fee (1000 basis points)
     ) -> OrderResult:
         """
         Place a limit order.
@@ -489,6 +549,27 @@ class TradingBot:
             if self.config.clob.signature_type == 0 and self.signer:
                 maker_address = self.signer.address
 
+            # Fetch fee rate from API if not explicitly provided (or if default value)
+            # This ensures we use the correct per-market fee rate
+            logger.info(f"[FEE] place_order called with fee_rate_bps={fee_rate_bps}")
+            if fee_rate_bps == 1000:  # Default value, fetch actual rate
+                logger.info(f"[FEE] Fetching actual fee rate for token {token_id[:8]}...")
+                try:
+                    actual_fee_rate = await self._run_in_thread(
+                        self.clob_client.get_fee_rate,
+                        token_id
+                    )
+                    logger.info(f"[FEE] API returned fee rate: {actual_fee_rate} bps")
+                    fee_rate_bps = actual_fee_rate
+                except Exception as e:
+                    logger.error(f"[FEE] Failed to fetch fee rate: {e}")
+                    logger.error(f"[FEE] Keeping default 1000 bps")
+                    # Keep the default 1000
+            else:
+                logger.info(f"[FEE] Using explicitly provided fee_rate_bps={fee_rate_bps}")
+            
+            logger.info(f"[FEE] Final fee_rate_bps for order: {fee_rate_bps}")
+
             # For GTC orders, expiration must be 0. For GTD, it should be a timestamp.
             expiration = 0 if order_type == "GTC" else int(time.time() + 3600)
             salt = random.randint(1, 10**12)      # Random salt for uniqueness
@@ -507,20 +588,17 @@ class TradingBot:
             )
 
             # Sign order with appropriate owner
-            # In Proxy mode (signature_type=2), owner is the Proxy address
-            # In EOA mode (signature_type=0), owner is the API key
-            if self.config.clob.signature_type == 2:
-                # Proxy mode: owner is the Proxy wallet address
-                api_key = self.config.safe_address
-            else:
-                # EOA mode: owner is the API key
-                api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
+            # The "owner" field must be the L2 API key STRING (not an address)
+            # Example: "faa27da2-xxxx-xxxx-xxxx", not "0x186DaFe3..."
+            api_key = self.clob_client.api_creds.api_key if self.clob_client.api_creds else None
             
-            signed = signer.sign_order(order, api_key=api_key)
+            signed = signer.sign_order(order, api_key=api_key, order_type=order_type)
 
             # Log physical payload for debugging auth issues
-            logger.debug(f"Order owner field (API Key): {signed.get('owner')}")
-            logger.debug(f"Order maker field: {signed.get('order', {}).get('maker')}")
+            logger.info(f"[ORDER] Owner (API key): {signed.get('owner', 'N/A')[:16]}...")
+            logger.info(f"[ORDER] Maker: {signed.get('order', {}).get('maker', 'N/A')}")
+            logger.info(f"[ORDER] Signer: {signed.get('order', {}).get('signer', 'N/A')}")
+            logger.info(f"[ORDER] Signature Type: {signed.get('order', {}).get('signatureType', 'N/A')}")
 
             # Submit to CLOB
             try:
