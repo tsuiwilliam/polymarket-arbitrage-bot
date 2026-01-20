@@ -90,12 +90,20 @@ fi
 if ! grep -q "alias attach-bot" ~/.bashrc; then
     echo "alias attach-bot='tmux attach -t arb-bot'" >> ~/.bashrc
     echo "alias stop-bot='tmux kill-session -t arb-bot'" >> ~/.bashrc
-    echo -e "${GREEN}✓ Added aliases: attach-bot, stop-bot${NC}"
-    echo "Run 'source ~/.bashrc' to load them."
+    echo "alias restart-bot='tmux kill-session -t arb-bot 2>/dev/null; ./start_bot_session.sh'" >> ~/.bashrc
+    echo -e "${GREEN}✓ Added aliases: attach-bot, stop-bot, restart-bot${NC}"
+    echo "Run 'source ~/.bashrc' to load them NOW, or they'll be available in new shells."
 else
      echo -e "${GREEN}✓ Aliases already present${NC}"
 fi
 
 echo -e "${GREEN}=== Setup Complete! ===${NC}"
-echo "To start now: ./start_bot_session.sh"
-echo "To view UI:   tmux attach -t arb-bot (or attach-bot)"
+echo ""
+echo "IMPORTANT: Run this command to activate aliases in current shell:"
+echo -e "${GREEN}source ~/.bashrc${NC}"
+echo ""
+echo "Then you can use:"
+echo "  ./start_bot_session.sh [args]  - Start bot"
+echo "  attach-bot                      - View UI"
+echo "  stop-bot                        - Stop bot"
+echo "  restart-bot [args]              - Restart with new parameters"
